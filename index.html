@@ -3,8 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mini FL Studio Pro (Fixed Final)</title>
+    <title>Mini FL Studio Pro (FNF Random Mode)</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Librería JSZip para manejar archivos .zip/.minifl -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <style>
         /* --- ESTILOS GENERALES --- */
         body {
@@ -30,12 +32,11 @@
         
         .btn-icon { @apply p-2 flex items-center justify-center transition-colors; }
 
-        /* --- CHANNEL RACK (FIXED LAYOUT) --- */
+        /* --- CHANNEL RACK --- */
         .channel-row {
-            /* Diseño flex rígido para evitar deformaciones */
             display: flex;
             align-items: center;
-            height: 48px; /* Altura fija */
+            height: 48px;
             padding: 0 12px;
             border-bottom: 1px solid #2a2a2a;
             background-color: #1e1e1e;
@@ -46,10 +47,9 @@
         .channel-row.selected {
             background-color: #2a2a2a;
             border-left: 4px solid #22c55e;
-            padding-left: 8px; /* Compensar borde */
+            padding-left: 8px; 
         }
         
-        /* Botones M/S */
         .track-control-btn {
             width: 20px;
             height: 20px;
@@ -66,8 +66,8 @@
         }
         .track-control-btn:hover { color: white; border-color: #666; }
         
-        .btn-mute.active { background-color: #ef4444; border-color: #b91c1c; color: white; } /* Rojo */
-        .btn-solo.active { background-color: #22c55e; border-color: #15803d; color: white; } /* Verde */
+        .btn-mute.active { background-color: #ef4444; border-color: #b91c1c; color: white; }
+        .btn-solo.active { background-color: #22c55e; border-color: #15803d; color: white; }
 
         /* --- PIANO ROLL --- */
         .grid-wrapper {
@@ -95,7 +95,6 @@
             background-color: #1e1e1e;
         }
 
-        /* Celdas */
         .cell {
             height: 24px;
             background-color: #222;
@@ -106,7 +105,6 @@
         .cell.row-sharp { background-color: #1a1a1a; }
         .cell.beat-start { border-left: 1px solid #3d3d3d; }
         .cell:hover { background-color: #333; }
-
         .cell.active {
             background-color: #4ade80;
             border: 1px solid #22c55e;
@@ -114,7 +112,6 @@
             z-index: 5;
         }
 
-        /* Teclas del piano */
         .piano-key {
             height: 24px;
             border-bottom: 1px solid #333;
@@ -127,13 +124,9 @@
             background: #2d2d2d;
             position: relative;
         }
-        .piano-key.sharp {
-            background: #111;
-            color: #666;
-        }
+        .piano-key.sharp { background: #111; color: #666; }
         .piano-key span { z-index: 2; }
 
-        /* Timeline */
         .timeline {
             height: 24px;
             background: #1a1a1a;
@@ -154,7 +147,6 @@
         }
         .time-marker.current { background: rgba(245, 158, 11, 0.3); border-bottom: 2px solid #f59e0b; }
 
-        /* Start Overlay */
         #startOverlay {
             position: fixed; inset: 0; background: rgba(0,0,0,0.85);
             backdrop-filter: blur(5px);
@@ -180,7 +172,6 @@
         <div class="flex items-center gap-4">
             <h1 class="text-lg font-bold tracking-widest text-gray-100">FL<span class="text-green-500">WEB</span></h1>
             
-            <!-- Transporte -->
             <div class="flex bg-[#111] rounded p-1 gap-1 border border-[#333]">
                 <button id="playBtn" class="btn-icon w-8 h-8 rounded hover:bg-[#333] text-green-500 hover:text-green-400" title="Play/Pause">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
@@ -193,7 +184,6 @@
                 </button>
             </div>
 
-            <!-- BPM & Vol -->
             <div class="flex items-center gap-3 bg-[#2a2a2a] px-3 py-1 rounded border border-[#333]">
                 <div class="flex flex-col">
                     <span class="text-[9px] text-gray-500 font-bold">TEMPO</span>
@@ -208,10 +198,10 @@
         </div>
 
         <div class="flex gap-2">
-            <button id="saveProjectBtn" class="btn-fl text-blue-400 border-blue-900/50 hover:bg-blue-900/30">Descargar Proyecto</button>
+            <button id="saveProjectBtn" class="btn-fl text-blue-400 border-blue-900/50 hover:bg-blue-900/30">Guardar (.minifl)</button>
             <label class="btn-fl text-yellow-400 border-yellow-900/50 hover:bg-yellow-900/30 cursor-pointer">
-                Cargar Proyecto
-                <input type="file" id="loadProjectInput" accept=".json" class="hidden">
+                Abrir (.minifl)
+                <input type="file" id="loadProjectInput" accept=".minifl,.zip" class="hidden">
             </label>
             <button id="resetBtn" class="btn-fl text-red-400 border-red-900/50 hover:bg-red-900/30 ml-2">Reset</button>
         </div>
@@ -219,41 +209,31 @@
 
     <!-- MAIN -->
     <main class="flex-1 flex overflow-hidden">
-        
-        <!-- SIDEBAR -->
         <aside class="w-72 bg-[#181818] border-r border-[#333] flex flex-col shrink-0 z-20 shadow-xl">
             <div class="p-3 border-b border-[#333] flex justify-between items-center bg-[#202020]">
                 <span class="text-xs font-bold text-gray-400 tracking-wider">CHANNEL RACK</span>
                 <button id="addTrackBtn" class="text-green-500 hover:text-green-400 font-bold text-xl leading-none px-2 py-1 hover:bg-[#333] rounded" title="Añadir nueva pista">+</button>
             </div>
-            
-            <div id="trackList" class="flex-1 overflow-y-auto bg-[#121212]">
-                <!-- Tracks aquí -->
-            </div>
-
-            <!-- Panel inferior sidebar -->
+            <div id="trackList" class="flex-1 overflow-y-auto bg-[#121212]"></div>
             <div class="p-3 border-t border-[#333] bg-[#1a1a1a]">
                 <div class="flex justify-between items-center mb-2">
                     <span class="text-[10px] text-gray-500 uppercase">Sample de la pista</span>
                 </div>
                 <label class="flex items-center gap-2 bg-[#252525] p-2 rounded cursor-pointer hover:bg-[#333] transition border border-[#333] group">
                     <svg class="text-gray-400 group-hover:text-white" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                    <span class="text-xs text-gray-300 truncate w-40" id="sampleNameDisplay">Original (G4)</span>
+                    <span class="text-xs text-gray-300 truncate w-40" id="sampleNameDisplay">...</span>
                     <input type="file" id="sampleInput" accept="audio/*" class="hidden">
                 </label>
             </div>
         </aside>
 
-        <!-- PIANO ROLL -->
         <div class="flex-1 flex flex-col bg-[#141414] min-w-0">
-            
             <div class="h-8 bg-[#1f1f1f] border-b border-[#333] flex items-center justify-between px-2 shrink-0">
                 <span id="currentTrackName" class="text-xs font-bold text-green-500 uppercase tracking-wider pl-2">Track 1</span>
                 <button id="addBarsBtn" class="btn-fl text-[10px] py-0 h-6 flex items-center gap-1">
                     <span>+</span> Extender Rejilla
                 </button>
             </div>
-
             <div class="flex-1 grid-wrapper relative">
                 <div id="keysContainer" class="keys-container"></div>
                 <div id="gridScrollArea" class="grid-scroll-area">
@@ -265,12 +245,35 @@
     </main>
 
     <script>
-        // === CONFIGURACIÓN ===
+        // === HELPERS BASE64 ===
+        const blobToBase64 = blob => {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.readAsDataURL(blob);
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = error => reject(error);
+            });
+        };
+
+        const base64ToBlob = async (base64) => {
+            const res = await fetch(base64);
+            return await res.blob();
+        };
+
+        // === CONFIGURACIÓN FNF ===
+        const FNF_URLS = [
+            'https://logise1.github.io/fnfstudio/up.wav',
+            'https://logise1.github.io/fnfstudio/down.wav',
+            'https://logise1.github.io/fnfstudio/left.wav',
+            'https://logise1.github.io/fnfstudio/right.wav'
+        ];
+        let fnfBuffers = [];
+
+        // === CONFIGURACIÓN NOTAS ===
         const NOTE_NAMES = ['B', 'A#', 'A', 'G#', 'G', 'F#', 'F', 'E', 'D#', 'D', 'C#', 'C'];
         const OCTAVES = [6, 5, 4, 3]; 
         let FULL_NOTES = [];
         
-        // Generar notas
         OCTAVES.forEach(oct => {
             NOTE_NAMES.forEach(note => {
                 FULL_NOTES.push({ note, oct, name: `${note}${oct}`, isSharp: note.includes('#') });
@@ -279,7 +282,6 @@
 
         const BASE_NOTE_FREQ = 391.995; 
         const BASE_NOTE_MIDI = 67;      
-        const DEFAULT_SAMPLE_URL = 'https://raw.githubusercontent.com/Logise1/static/main/bi-online-audio-converter.mp3';
 
         // === ESTADO GLOBAL ===
         let audioCtx;
@@ -307,7 +309,6 @@
         const startAppBtn = document.getElementById('startAppBtn');
 
         // === AUDIO ENGINE ===
-        
         function getAudioContext() {
             if (!audioCtx) {
                 const AudioContext = window.AudioContext || window.webkitAudioContext;
@@ -319,48 +320,78 @@
             return audioCtx;
         }
 
+        async function preloadFnfSamples() {
+            const ctx = getAudioContext();
+            const promises = FNF_URLS.map(async (url) => {
+                try {
+                    const res = await fetch(url);
+                    const arrayBuffer = await res.arrayBuffer();
+                    return await ctx.decodeAudioData(arrayBuffer);
+                } catch (e) {
+                    console.error("Error cargando sample FNF:", url, e);
+                    return null;
+                }
+            });
+            fnfBuffers = (await Promise.all(promises)).filter(b => b !== null);
+            console.log("Samples FNF cargados:", fnfBuffers.length);
+        }
+
         class Track {
             constructor(id, name, color = '#4ade80') {
                 this.id = id;
                 this.name = name;
                 this.color = color;
-                this.buffer = null;
+                this.buffer = null; // Buffer para sample custom
+                this.sourceBlob = null; 
+                this.base64Data = null; 
                 this.sampleUrl = null;
                 this.notes = {}; 
                 this.muted = false;
                 this.solo = false;
-                this.isLoading = false; 
+                this.isLoading = false;
+                this.isRandom = true; // Por defecto usa voces random
             }
 
-            async loadSample(url) {
+            // Carga desde URL (string) o Blob (objeto)
+            async loadSample(input) {
                 this.isLoading = true;
+                this.isRandom = false; // Al cargar uno custom, desactivamos random
                 renderTrackList(); 
                 
                 try {
-                    const ctx = getAudioContext(); 
-                    const response = await fetch(url);
-                    const arrayBuffer = await response.arrayBuffer();
+                    const ctx = getAudioContext();
+                    let arrayBuffer;
+
+                    if (input instanceof Blob) {
+                        this.sourceBlob = input;
+                        this.sampleUrl = null; 
+                        arrayBuffer = await input.arrayBuffer();
+                        this.base64Data = await blobToBase64(input);
+                    } else if (typeof input === 'string') {
+                        if (input.startsWith('data:')) {
+                            this.base64Data = input;
+                            this.sourceBlob = await base64ToBlob(input);
+                            arrayBuffer = await this.sourceBlob.arrayBuffer();
+                            this.sampleUrl = null;
+                        } else {
+                            this.sampleUrl = input;
+                            const response = await fetch(input);
+                            this.sourceBlob = await response.blob();
+                            arrayBuffer = await this.sourceBlob.arrayBuffer();
+                            this.base64Data = await blobToBase64(this.sourceBlob);
+                        }
+                    }
+
                     this.buffer = await ctx.decodeAudioData(arrayBuffer);
-                    this.sampleUrl = url;
                 } catch (e) {
                     console.error(`Error loading sample for ${this.name}:`, e);
-                    this.createFallbackBuffer();
+                    // Si falla, volvemos a random? Mejor fallback silencioso o mantener random
+                    this.isRandom = true; 
                 } finally {
                     this.isLoading = false;
                     renderTrackList();
+                    saveToLocalStorage();
                 }
-            }
-
-            createFallbackBuffer() {
-                const ctx = getAudioContext();
-                const sr = ctx.sampleRate;
-                const buff = ctx.createBuffer(1, sr * 0.5, sr);
-                const data = buff.getChannelData(0);
-                for(let i=0; i<data.length; i++) {
-                    let t = i/sr;
-                    data[i] = Math.sin(t * 440 * 2 * Math.PI) * Math.exp(-10*t);
-                }
-                this.buffer = buff;
             }
         }
 
@@ -374,34 +405,41 @@
         }
 
         function playSound(track, noteIndex, time, ctx = null, dest = null) {
-            if (!track.buffer || track.muted) return;
+            if (track.muted) return;
             
-            // Solo logic check global
-            if (!dest) { // Solo aplica en playback real, no render
-                 const anySolo = tracks.some(t => t.solo);
-                 if (anySolo && !track.solo) return;
+            // Check solo
+            const anySolo = tracks.some(t => t.solo);
+            if (anySolo && !track.solo) return;
+
+            let bufferToPlay = null;
+
+            // Lógica de selección de buffer
+            if (track.isRandom && fnfBuffers.length > 0) {
+                // Elegir uno random de los 4 FNF
+                bufferToPlay = fnfBuffers[Math.floor(Math.random() * fnfBuffers.length)];
             } else {
-                 // Render logic
-                 const anySolo = tracks.some(t => t.solo);
-                 if (anySolo && !track.solo) return;
+                bufferToPlay = track.buffer;
             }
+
+            if (!bufferToPlay) return;
 
             const context = ctx || getAudioContext();
             
             try {
                 const source = context.createBufferSource();
-                source.buffer = track.buffer;
+                source.buffer = bufferToPlay;
+                
+                // Si es random FNF, quizás queremos mantener el pitch original o variarlo
+                // Aplicamos pitch shift igualmente para que sea melódico
                 source.playbackRate.value = getPlaybackRate(noteIndex);
 
                 const gain = context.createGain();
                 gain.gain.value = 1.0; 
 
                 source.connect(gain);
-                if (dest) {
-                    gain.connect(dest);
-                } else {
-                    gain.connect(masterGain);
-                }
+                if (dest) gain.connect(dest);
+                else gain.connect(masterGain);
+                
                 source.start(time);
             } catch(e) { }
         }
@@ -409,24 +447,30 @@
         // === STORAGE MANAGER ===
 
         function saveToLocalStorage() {
-            const state = {
-                tempo,
-                totalSteps,
-                tracks: tracks.map(t => ({
-                    id: t.id,
-                    name: t.name,
-                    color: t.color,
-                    notes: t.notes,
-                    muted: t.muted,
-                    solo: t.solo,
-                    sampleUrl: (t.sampleUrl && !t.sampleUrl.startsWith('blob:')) ? t.sampleUrl : DEFAULT_SAMPLE_URL
-                }))
-            };
-            localStorage.setItem('minifl_project', JSON.stringify(state));
+            try {
+                const state = {
+                    tempo,
+                    totalSteps,
+                    tracks: tracks.map(t => ({
+                        id: t.id,
+                        name: t.name,
+                        color: t.color,
+                        notes: t.notes,
+                        muted: t.muted,
+                        solo: t.solo,
+                        isRandom: t.isRandom,
+                        sampleBase64: t.base64Data, 
+                        sampleUrl: t.sampleUrl 
+                    }))
+                };
+                localStorage.setItem('minifl_project_v3', JSON.stringify(state));
+            } catch (e) {
+                console.warn("Storage quota exceeded", e);
+            }
         }
 
-        function loadFromLocalStorage() {
-            const raw = localStorage.getItem('minifl_project');
+        async function loadFromLocalStorage() {
+            const raw = localStorage.getItem('minifl_project_v3');
             if(!raw) return false;
 
             try {
@@ -436,26 +480,34 @@
                 document.getElementById('tempoInput').value = tempo;
 
                 tracks = [];
-                state.tracks.forEach(tData => {
+                for (const tData of state.tracks) {
                     const t = new Track(tData.id, tData.name, tData.color);
                     t.notes = tData.notes || {};
                     t.muted = tData.muted || false;
                     t.solo = tData.solo || false;
-                    t.loadSample(tData.sampleUrl || DEFAULT_SAMPLE_URL);
+                    t.isRandom = (tData.isRandom !== undefined) ? tData.isRandom : true; // Default to random if undefined
+
+                    if (!t.isRandom) {
+                        if (tData.sampleBase64) {
+                            await t.loadSample(tData.sampleBase64);
+                        } else if (tData.sampleUrl) {
+                            await t.loadSample(tData.sampleUrl);
+                        }
+                    }
                     tracks.push(t);
-                });
+                }
                 
                 if(tracks.length > 0) selectTrack(0);
                 renderGrid();
                 return true;
             } catch(e) {
-                console.error(e);
+                console.error("Error loading localStorage", e);
                 return false;
             }
         }
 
         function clearLocalStorage() {
-            localStorage.removeItem('minifl_project');
+            localStorage.removeItem('minifl_project_v3');
             location.reload();
         }
 
@@ -516,75 +568,49 @@
             btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>`;
         }
 
-        // === EXPORTAR WAV (NUEVO SISTEMA OFFLINE) ===
-
+        // === EXPORTAR WAV (OFFLINE) ===
+        // ... (Helpers WAV unchanged)
         function audioBufferToWav(buffer, opt) {
             opt = opt || {};
             var numChannels = buffer.numberOfChannels;
             var sampleRate = buffer.sampleRate;
             var format = opt.float32 ? 3 : 1;
             var bitDepth = format === 3 ? 32 : 16;
-        
             var result;
             if (numChannels === 2) {
                 result = interleave(buffer.getChannelData(0), buffer.getChannelData(1));
             } else {
                 result = buffer.getChannelData(0);
             }
-        
             return encodeWAV(result, format, sampleRate, numChannels, bitDepth);
         }
-        
         function encodeWAV(samples, format, sampleRate, numChannels, bitDepth) {
             var bytesPerSample = bitDepth / 8;
             var blockAlign = numChannels * bytesPerSample;
-        
             var buffer = new ArrayBuffer(44 + samples.length * bytesPerSample);
             var view = new DataView(buffer);
-        
-            /* RIFF identifier */
             writeString(view, 0, 'RIFF');
-            /* RIFF chunk length */
             view.setUint32(4, 36 + samples.length * bytesPerSample, true);
-            /* RIFF type */
             writeString(view, 8, 'WAVE');
-            /* format chunk identifier */
             writeString(view, 12, 'fmt ');
-            /* format chunk length */
             view.setUint32(16, 16, true);
-            /* sample format (raw) */
             view.setUint16(20, format, true);
-            /* channel count */
             view.setUint16(22, numChannels, true);
-            /* sample rate */
             view.setUint32(24, sampleRate, true);
-            /* byte rate (sample rate * block align) */
             view.setUint32(28, sampleRate * blockAlign, true);
-            /* block align (channel count * bytes per sample) */
             view.setUint16(32, blockAlign, true);
-            /* bits per sample */
             view.setUint16(34, bitDepth, true);
-            /* data chunk identifier */
             writeString(view, 36, 'data');
-            /* data chunk length */
             view.setUint32(40, samples.length * bytesPerSample, true);
-        
-            if (format === 1) { // Raw PCM
-                floatTo16BitPCM(view, 44, samples);
-            } else {
-                writeFloat32(view, 44, samples);
-            }
-        
+            if (format === 1) floatTo16BitPCM(view, 44, samples);
+            else writeFloat32(view, 44, samples);
             return buffer;
         }
-        
         function interleave(inputL, inputR) {
             var length = inputL.length + inputR.length;
             var result = new Float32Array(length);
-        
             var index = 0;
             var inputIndex = 0;
-        
             while (index < length) {
                 result[index++] = inputL[inputIndex];
                 result[index++] = inputR[inputIndex];
@@ -592,57 +618,41 @@
             }
             return result;
         }
-        
         function writeString(view, offset, string) {
-            for (var i = 0; i < string.length; i++) {
-                view.setUint8(offset + i, string.charCodeAt(i));
-            }
+            for (var i = 0; i < string.length; i++) view.setUint8(offset + i, string.charCodeAt(i));
         }
-        
         function floatTo16BitPCM(output, offset, input) {
             for (var i = 0; i < input.length; i++, offset += 2) {
                 var s = Math.max(-1, Math.min(1, input[i]));
                 output.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
             }
         }
-        
         function writeFloat32(output, offset, input) {
-            for (var i = 0; i < input.length; i++, offset += 4) {
-                output.setFloat32(offset, input[i], true);
-            }
+            for (var i = 0; i < input.length; i++, offset += 4) output.setFloat32(offset, input[i], true);
         }
-
+        
         async function renderAudio() {
             if (isPlaying) stop();
-            if (!confirm("¿Renderizar proyecto a .wav? (Esto es muy rápido)")) return;
-
-            // Calcular duración total
+            if (!confirm("¿Renderizar proyecto a .wav?")) return;
             const secondsPerBeat = 60.0 / tempo;
             const totalDuration = totalSteps * 0.25 * secondsPerBeat;
-            
-            // Configurar Offline Context
             const sr = 44100;
-            const offlineCtx = new OfflineAudioContext(2, sr * (totalDuration + 1), sr); // +1s cola
-
-            // Programar todo en el contexto offline
+            const offlineCtx = new OfflineAudioContext(2, sr * (totalDuration + 1), sr);
+            
             tracks.forEach(track => {
                 if (track.muted) return;
                 const anySolo = tracks.some(t => t.solo);
                 if (anySolo && !track.solo) return;
-
-                // Recorrer todos los pasos
                 for (let step = 0; step < totalSteps; step++) {
                      const time = step * 0.25 * secondsPerBeat;
                      for (let i = 0; i < FULL_NOTES.length; i++) {
                         if (track.notes[`${step}_${i}`]) {
-                            // Reproducir en offlineCtx
                             playSound(track, i, time, offlineCtx, offlineCtx.destination);
                         }
                     }
                 }
             });
 
-            // Renderizar
             startAppBtn.textContent = "Renderizando...";
             try {
                 const renderedBuffer = await offlineCtx.startRendering();
@@ -660,47 +670,35 @@
                 console.error(e);
                 alert("Error renderizando audio.");
             } finally {
-                 startAppBtn.textContent = "ACTIVAR SONIDO"; // Reset label just in case
+                 startAppBtn.textContent = "ACTIVAR SONIDO"; 
             }
         }
 
         // === UI RENDERING ===
-
         function renderGrid() {
             keysContainer.innerHTML = '';
             pianoGrid.innerHTML = '';
             timeline.innerHTML = '';
-
             const colWidth = 30; 
             pianoGrid.style.gridTemplateColumns = `repeat(${totalSteps}, ${colWidth}px)`;
             pianoGrid.style.width = `${totalSteps * colWidth}px`;
             timeline.style.width = `${totalSteps * colWidth}px`;
-
             FULL_NOTES.forEach((n, rowIndex) => {
                 const key = document.createElement('div');
                 key.className = `piano-key ${n.isSharp ? 'sharp' : ''}`;
                 key.innerHTML = `<span>${n.name}</span>`;
                 keysContainer.appendChild(key);
-
                 for (let col = 0; col < totalSteps; col++) {
                     const cell = document.createElement('div');
                     const isBeatStart = col % 4 === 0;
                     cell.className = `cell ${n.isSharp ? 'row-sharp' : ''} ${isBeatStart ? 'beat-start' : ''}`;
-                    
                     const currentTrack = tracks[activeTrackId];
-                    if (currentTrack && currentTrack.notes[`${col}_${rowIndex}`]) {
-                        cell.classList.add('active');
-                    }
-
+                    if (currentTrack && currentTrack.notes[`${col}_${rowIndex}`]) cell.classList.add('active');
                     cell.onmousedown = (e) => handleCellClick(rowIndex, col, cell, e);
-                    cell.onmouseenter = (e) => {
-                        if (e.buttons === 1) handleCellClick(rowIndex, col, cell, e, true);
-                    };
-
+                    cell.onmouseenter = (e) => { if (e.buttons === 1) handleCellClick(rowIndex, col, cell, e, true); };
                     pianoGrid.appendChild(cell);
                 }
             });
-
             for(let i=0; i<totalSteps; i++) {
                 const mark = document.createElement('div');
                 mark.className = 'time-marker';
@@ -713,7 +711,6 @@
 
         function handleCellClick(row, col, cell, e, isDrag = false) {
             if (!tracks[activeTrackId]) return; 
-            
             const track = tracks[activeTrackId];
             const key = `${col}_${row}`;
             const ctx = getAudioContext();
@@ -724,13 +721,11 @@
                 playSound(track, row, ctx.currentTime);
                 saveToLocalStorage(); 
             };
-
             const deactivate = () => {
                 delete track.notes[key];
                 cell.classList.remove('active');
                 saveToLocalStorage(); 
             };
-
             if (isDrag) {
                 if (!track.notes[key]) activate();
             } else {
@@ -745,39 +740,26 @@
                 const row = document.createElement('div');
                 row.className = `channel-row ${idx === activeTrackId ? 'selected' : ''}`;
                 
-                // Botones Mute/Solo
                 const btnMute = document.createElement('div');
                 btnMute.className = `track-control-btn btn-mute ${t.muted ? 'active' : ''}`;
                 btnMute.textContent = 'M';
-                btnMute.onclick = (e) => {
-                    e.stopPropagation();
-                    t.muted = !t.muted;
-                    saveToLocalStorage();
-                    renderTrackList();
-                };
+                btnMute.onclick = (e) => { e.stopPropagation(); t.muted = !t.muted; saveToLocalStorage(); renderTrackList(); };
 
                 const btnSolo = document.createElement('div');
                 btnSolo.className = `track-control-btn btn-solo ${t.solo ? 'active' : ''}`;
                 btnSolo.textContent = 'S';
-                btnSolo.onclick = (e) => {
-                    e.stopPropagation();
-                    t.solo = !t.solo;
-                    saveToLocalStorage();
-                    renderTrackList();
-                };
+                btnSolo.onclick = (e) => { e.stopPropagation(); t.solo = !t.solo; saveToLocalStorage(); renderTrackList(); };
 
-                // Contenido
                 const infoDiv = document.createElement('div');
                 infoDiv.className = "flex-1 min-w-0 flex flex-col justify-center ml-2";
-                infoDiv.innerHTML = `<div class="text-xs font-bold text-gray-200 truncate select-none">${t.name}</div>`;
-
-                const colorBar = document.createElement('div');
-                colorBar.className = "w-1 h-full absolute left-0 top-0 bottom-0";
-                colorBar.style.backgroundColor = t.color;
                 
-                // Si no está seleccionado, no se ve el borde verde, pero la barra de color ayuda
-                // En el diseño actual el borde verde es de selección.
-                // Usaremos un indicador pequeño dentro
+                // Mostrar si es Random o Custom en el nombre
+                let statusText = t.isRandom ? "FNF Random" : "Custom";
+                infoDiv.innerHTML = `
+                    <div class="text-xs font-bold text-gray-200 truncate select-none">${t.name}</div>
+                    <div class="text-[9px] text-gray-500">${statusText}</div>
+                `;
+
                 const indicator = document.createElement('div');
                 indicator.className = "w-2 h-2 rounded-full mr-2";
                 indicator.style.backgroundColor = t.color;
@@ -786,7 +768,6 @@
                 row.appendChild(btnMute);
                 row.appendChild(btnSolo);
                 row.appendChild(infoDiv);
-
                 row.onclick = () => selectTrack(idx);
                 trackList.appendChild(row);
             });
@@ -804,7 +785,12 @@
             const t = tracks[activeTrackId];
             if(t) {
                 document.getElementById('currentTrackName').textContent = t.name;
-                sampleNameDisplay.textContent = t.sampleUrl ? (t.sampleUrl.startsWith('blob:') ? 'Audio Personalizado' : 'Original') : 'Original';
+                
+                if (t.isRandom) {
+                    sampleNameDisplay.textContent = 'Voces Random FNF';
+                } else {
+                    sampleNameDisplay.textContent = t.sampleUrl ? (t.sampleUrl.startsWith('blob:') ? 'Audio Custom' : 'Sample Original') : 'Audio Custom';
+                }
             }
         }
 
@@ -822,84 +808,123 @@
             }
         }
 
-        // === GESTIÓN DE PROYECTOS Y TRACKS ===
+        // === GESTIÓN DE PROYECTOS (.minifl = ZIP) ===
 
         function addTrack(name = "Instrumento") {
             const id = tracks.length;
             const newTrack = new Track(id, name);
-            newTrack.loadSample(DEFAULT_SAMPLE_URL);
+            // Por defecto, newTrack.isRandom es true. No cargamos nada.
             tracks.push(newTrack);
             renderTrackList();
             if (tracks.length === 1) renderGrid();
             saveToLocalStorage();
         }
 
-        function saveProjectFile() {
+        async function saveProjectFile() {
+            const zip = new JSZip();
+            
             const state = {
                 tempo,
                 totalSteps,
-                tracks: tracks.map(t => ({
+                tracks: []
+            };
+
+            for (const t of tracks) {
+                const trackMeta = {
                     id: t.id,
                     name: t.name,
                     color: t.color,
                     notes: t.notes,
                     muted: t.muted,
-                    solo: t.solo
-                }))
-            };
-            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(state, null, 2));
-            const downloadAnchorNode = document.createElement('a');
-            downloadAnchorNode.setAttribute("href", dataStr);
-            downloadAnchorNode.setAttribute("download", "proyecto_minifl.json");
-            document.body.appendChild(downloadAnchorNode); // required for firefox
-            downloadAnchorNode.click();
-            downloadAnchorNode.remove();
+                    solo: t.solo,
+                    isRandom: t.isRandom,
+                    sampleFileName: null 
+                };
+
+                if (!t.isRandom) {
+                    if (t.sourceBlob) {
+                        const fileName = `sample_${t.id}.wav`; 
+                        zip.file(`samples/${fileName}`, t.sourceBlob);
+                        trackMeta.sampleFileName = fileName;
+                    } else if (t.sampleUrl) {
+                        trackMeta.sampleUrl = t.sampleUrl; 
+                    }
+                }
+
+                state.tracks.push(trackMeta);
+            }
+
+            zip.file("project.json", JSON.stringify(state, null, 2));
+
+            const content = await zip.generateAsync({type:"blob"});
+            const url = URL.createObjectURL(content);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'proyecto.minifl';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
         }
 
-        function loadProjectFile(e) {
+        async function loadProjectFile(e) {
             const file = e.target.files[0];
             if(!file) return;
 
-            const reader = new FileReader();
-            reader.onload = (ev) => {
-                try {
-                    const state = JSON.parse(ev.target.result);
-                    tempo = state.tempo || 130;
-                    totalSteps = state.totalSteps || 32;
-                    document.getElementById('tempoInput').value = tempo;
+            try {
+                const zip = await JSZip.loadAsync(file);
+                
+                const projectText = await zip.file("project.json").async("string");
+                const state = JSON.parse(projectText);
 
-                    tracks = [];
-                    state.tracks.forEach(tData => {
-                        const t = new Track(tData.id, tData.name, tData.color);
-                        t.notes = tData.notes || {};
-                        t.muted = tData.muted || false;
-                        t.solo = tData.solo || false;
-                        t.loadSample(DEFAULT_SAMPLE_URL);
-                        tracks.push(t);
-                    });
+                tempo = state.tempo || 130;
+                totalSteps = state.totalSteps || 32;
+                document.getElementById('tempoInput').value = tempo;
 
-                    if(tracks.length > 0) selectTrack(0);
-                    renderGrid();
-                    saveToLocalStorage();
-                    alert("Proyecto cargado correctamente.");
-                } catch(err) {
-                    alert("Error al leer el archivo.");
-                    console.error(err);
+                tracks = [];
+                for (const tData of state.tracks) {
+                    const t = new Track(tData.id, tData.name, tData.color);
+                    t.notes = tData.notes || {};
+                    t.muted = tData.muted || false;
+                    t.solo = tData.solo || false;
+                    t.isRandom = (tData.isRandom !== undefined) ? tData.isRandom : true;
+
+                    if (!t.isRandom) {
+                        if (tData.sampleFileName) {
+                            const sampleFile = zip.file(`samples/${tData.sampleFileName}`);
+                            if (sampleFile) {
+                                const blob = await sampleFile.async("blob");
+                                await t.loadSample(blob);
+                            }
+                        } else if (tData.sampleUrl) {
+                            await t.loadSample(tData.sampleUrl);
+                        }
+                    }
+                    tracks.push(t);
                 }
-            };
-            reader.readAsText(file);
+
+                if(tracks.length > 0) selectTrack(0);
+                renderGrid();
+                saveToLocalStorage(); 
+                alert("Proyecto cargado con éxito.");
+
+            } catch(err) {
+                console.error(err);
+                alert("Error al abrir el archivo .minifl (Zip).");
+            }
             e.target.value = '';
         }
 
-        function initApp() {
-            const loaded = loadFromLocalStorage();
-            if (!loaded) addTrack("Lead Synth");
+        async function initApp() {
+            // Asegurar que FNF samples se carguen al inicio (o cuando haya contexto)
+            // preloadFnfSamples se llamará tras click de inicio
+            
+            const loaded = await loadFromLocalStorage();
+            if (!loaded) addTrack("Lead Synth"); // Por defecto entra en modo Random
             
             gridScrollArea.addEventListener('scroll', () => {
                 keysContainer.scrollTop = gridScrollArea.scrollTop;
             });
 
-            // Listeners
             document.getElementById('playBtn').onclick = play;
             document.getElementById('stopBtn').onclick = stop;
             document.getElementById('recBtn').onclick = renderAudio;
@@ -922,8 +947,7 @@
                 const f = e.target.files[0];
                 if(f) {
                     tracks[activeTrackId].name = f.name.substring(0,12);
-                    tracks[activeTrackId].loadSample(URL.createObjectURL(f));
-                    renderTrackList();
+                    tracks[activeTrackId].loadSample(f);
                 }
             };
 
@@ -939,11 +963,14 @@
         startAppBtn.onclick = () => {
             const ctx = getAudioContext();
             try { ctx.resume(); } catch(e) {}
+            
+            // Cargar samples FNF ahora que tenemos interaccion
+            preloadFnfSamples();
+
             startOverlay.style.opacity = '0';
             startOverlay.style.pointerEvents = 'none';
             setTimeout(() => startOverlay.classList.add('hidden'), 500);
         };
-
     </script>
 </body>
 </html>
