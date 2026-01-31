@@ -3,162 +3,60 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mini FL Studio Pro (FNF Random Mode)</title>
+    <title>Mini FL Studio Pro (Auto-Tune)</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Librería JSZip para manejar archivos .zip/.minifl -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <style>
         /* --- ESTILOS GENERALES --- */
-        body {
-            background-color: #121212;
-            color: #d4d4d4;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            overflow: hidden;
-            user-select: none;
-        }
-
-        /* Scrollbars */
+        body { background-color: #121212; color: #d4d4d4; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; overflow: hidden; user-select: none; }
         ::-webkit-scrollbar { width: 8px; height: 8px; }
         ::-webkit-scrollbar-track { background: #1e1e1e; }
         ::-webkit-scrollbar-thumb { background: #444; border-radius: 4px; }
         ::-webkit-scrollbar-thumb:hover { background: #555; }
 
         /* --- UI COMPONENTS --- */
-        .btn-fl {
-            @apply px-3 py-1 rounded text-xs font-bold transition-all border border-[#444] bg-[#333] text-gray-200;
-        }
+        .btn-fl { @apply px-3 py-1 rounded text-xs font-bold transition-all border border-[#444] bg-[#333] text-gray-200; }
         .btn-fl:hover { @apply bg-[#444] border-[#555]; }
         .btn-fl:active { @apply transform translate-y-[1px]; }
-        
         .btn-icon { @apply p-2 flex items-center justify-center transition-colors; }
 
         /* --- CHANNEL RACK --- */
-        .channel-row {
-            display: flex;
-            align-items: center;
-            height: 48px;
-            padding: 0 12px;
-            border-bottom: 1px solid #2a2a2a;
-            background-color: #1e1e1e;
-            cursor: pointer;
-            transition: background-color 0.2s;
-        }
+        .channel-row { display: flex; align-items: center; height: 48px; padding: 0 12px; border-bottom: 1px solid #2a2a2a; background-color: #1e1e1e; cursor: pointer; transition: background-color 0.2s; }
         .channel-row:hover { background-color: #252525; }
-        .channel-row.selected {
-            background-color: #2a2a2a;
-            border-left: 4px solid #22c55e;
-            padding-left: 8px; 
-        }
+        .channel-row.selected { background-color: #2a2a2a; border-left: 4px solid #22c55e; padding-left: 8px; }
         
-        .track-control-btn {
-            width: 20px;
-            height: 20px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 10px;
-            font-weight: bold;
-            border-radius: 2px;
-            border: 1px solid #444;
-            color: #888;
-            margin-right: 4px;
-            transition: all 0.1s;
-        }
+        .track-control-btn { width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: bold; border-radius: 2px; border: 1px solid #444; color: #888; margin-right: 4px; transition: all 0.1s; }
         .track-control-btn:hover { color: white; border-color: #666; }
-        
         .btn-mute.active { background-color: #ef4444; border-color: #b91c1c; color: white; }
         .btn-solo.active { background-color: #22c55e; border-color: #15803d; color: white; }
 
         /* --- PIANO ROLL --- */
-        .grid-wrapper {
-            display: grid;
-            grid-template-columns: 60px 1fr; 
-            height: 100%;
-            overflow: hidden;
-        }
+        .grid-wrapper { display: grid; grid-template-columns: 60px 1fr; height: 100%; overflow: hidden; }
+        .keys-container { background: #181818; border-right: 1px solid #333; z-index: 10; overflow: hidden; }
+        .grid-scroll-area { overflow: auto; position: relative; background: #141414; }
+        .piano-grid { display: grid; background-color: #1e1e1e; }
 
-        .keys-container {
-            background: #181818;
-            border-right: 1px solid #333;
-            z-index: 10;
-            overflow: hidden; 
-        }
-
-        .grid-scroll-area {
-            overflow: auto;
-            position: relative;
-            background: #141414;
-        }
-
-        .piano-grid {
-            display: grid;
-            background-color: #1e1e1e;
-        }
-
-        .cell {
-            height: 24px;
-            background-color: #222;
-            border-right: 1px solid #2a2a2a;
-            border-bottom: 1px solid #2a2a2a;
-            position: relative;
-        }
+        .cell { height: 24px; background-color: #222; border-right: 1px solid #2a2a2a; border-bottom: 1px solid #2a2a2a; position: relative; }
         .cell.row-sharp { background-color: #1a1a1a; }
         .cell.beat-start { border-left: 1px solid #3d3d3d; }
         .cell:hover { background-color: #333; }
-        .cell.active {
-            background-color: #4ade80;
-            border: 1px solid #22c55e;
-            box-shadow: inset 0 0 4px rgba(0,0,0,0.5);
-            z-index: 5;
-        }
+        .cell.active { background-color: #4ade80; border: 1px solid #22c55e; box-shadow: inset 0 0 4px rgba(0,0,0,0.5); z-index: 5; }
 
-        .piano-key {
-            height: 24px;
-            border-bottom: 1px solid #333;
-            display: flex;
-            align-items: center;
-            justify-content: flex-end;
-            padding-right: 4px;
-            font-size: 10px;
-            color: #888;
-            background: #2d2d2d;
-            position: relative;
-        }
+        .piano-key { height: 24px; border-bottom: 1px solid #333; display: flex; align-items: center; justify-content: flex-end; padding-right: 4px; font-size: 10px; color: #888; background: #2d2d2d; position: relative; }
         .piano-key.sharp { background: #111; color: #666; }
         .piano-key span { z-index: 2; }
 
-        .timeline {
-            height: 24px;
-            background: #1a1a1a;
-            border-bottom: 1px solid #444;
-            display: flex;
-            position: sticky;
-            top: 0;
-            z-index: 20;
-        }
-        .time-marker {
-            flex-shrink: 0;
-            border-right: 1px solid #333;
-            font-size: 9px;
-            color: #666;
-            display: flex;
-            align-items: center;
-            padding-left: 4px;
-        }
+        .timeline { height: 24px; background: #1a1a1a; border-bottom: 1px solid #444; display: flex; position: sticky; top: 0; z-index: 20; }
+        .time-marker { flex-shrink: 0; border-right: 1px solid #333; font-size: 9px; color: #666; display: flex; align-items: center; padding-left: 4px; }
         .time-marker.current { background: rgba(245, 158, 11, 0.3); border-bottom: 2px solid #f59e0b; }
 
-        #startOverlay {
-            position: fixed; inset: 0; background: rgba(0,0,0,0.85);
-            backdrop-filter: blur(5px);
-            display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 200;
-            transition: opacity 0.3s ease;
-        }
+        #startOverlay { position: fixed; inset: 0; background: rgba(0,0,0,0.85); backdrop-filter: blur(5px); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 200; transition: opacity 0.3s ease; }
         .pointer-events-none { pointer-events: none; }
     </style>
 </head>
 <body class="h-screen flex flex-col">
 
-    <!-- OVERLAY DE INICIO -->
+    <!-- OVERLAY -->
     <div id="startOverlay">
         <h1 class="text-5xl font-bold text-gray-100 mb-2 tracking-widest">FL<span class="text-green-500">WEB</span></h1>
         <p class="text-gray-400 mb-8 font-mono text-sm">Motor de audio listo. Haz clic para activar.</p>
@@ -171,7 +69,6 @@
     <header class="h-14 bg-[#202020] border-b border-[#333] flex items-center justify-between px-4 shadow-lg shrink-0">
         <div class="flex items-center gap-4">
             <h1 class="text-lg font-bold tracking-widest text-gray-100">FL<span class="text-green-500">WEB</span></h1>
-            
             <div class="flex bg-[#111] rounded p-1 gap-1 border border-[#333]">
                 <button id="playBtn" class="btn-icon w-8 h-8 rounded hover:bg-[#333] text-green-500 hover:text-green-400" title="Play/Pause">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
@@ -183,7 +80,6 @@
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10"/></svg>
                 </button>
             </div>
-
             <div class="flex items-center gap-3 bg-[#2a2a2a] px-3 py-1 rounded border border-[#333]">
                 <div class="flex flex-col">
                     <span class="text-[9px] text-gray-500 font-bold">TEMPO</span>
@@ -196,7 +92,6 @@
                 </div>
             </div>
         </div>
-
         <div class="flex gap-2">
             <button id="saveProjectBtn" class="btn-fl text-blue-400 border-blue-900/50 hover:bg-blue-900/30">Guardar (.minifl)</button>
             <label class="btn-fl text-yellow-400 border-yellow-900/50 hover:bg-yellow-900/30 cursor-pointer">
@@ -226,7 +121,6 @@
                 </label>
             </div>
         </aside>
-
         <div class="flex-1 flex flex-col bg-[#141414] min-w-0">
             <div class="h-8 bg-[#1f1f1f] border-b border-[#333] flex items-center justify-between px-2 shrink-0">
                 <span id="currentTrackName" class="text-xs font-bold text-green-500 uppercase tracking-wider pl-2">Track 1</span>
@@ -245,6 +139,102 @@
     </main>
 
     <script>
+        // === HELPERS & CONSTANTS ===
+        const FNF_URLS = [
+            'https://logise1.github.io/fnfstudio/up.wav',
+            'https://logise1.github.io/fnfstudio/down.wav',
+            'https://logise1.github.io/fnfstudio/left.wav',
+            'https://logise1.github.io/fnfstudio/right.wav'
+        ];
+        
+        // Almacenará objetos { buffer: AudioBuffer, rootMidi: number }
+        let fnfSamplesData = [];
+
+        const NOTE_NAMES = ['B', 'A#', 'A', 'G#', 'G', 'F#', 'F', 'E', 'D#', 'D', 'C#', 'C'];
+        const OCTAVES = [6, 5, 4, 3]; 
+        let FULL_NOTES = [];
+        OCTAVES.forEach(oct => {
+            NOTE_NAMES.forEach(note => {
+                FULL_NOTES.push({ note, oct, name: `${note}${oct}`, isSharp: note.includes('#') });
+            });
+        });
+
+        // Este será el fallback si no se detecta pitch
+        const DEFAULT_ROOT_MIDI = 65; // ~F4 (pitch medio común)
+
+        // === PITCH DETECTION ALGORITHM (Autocorrelation) ===
+        function detectPitch(buffer) {
+            const float32AudioBuffer = buffer.getChannelData(0);
+            const sampleRate = buffer.sampleRate;
+            
+            // Buscar inicio de sonido real (RMS > 0.01) para evitar silencio inicial
+            let startIdx = 0;
+            const threshold = 0.05;
+            for(let i=0; i<float32AudioBuffer.length; i++) {
+                if(Math.abs(float32AudioBuffer[i]) > threshold) {
+                    startIdx = i;
+                    break;
+                }
+            }
+
+            // Tomar un chunk de 4096 samples desde el inicio del sonido
+            const SIZE = 4096;
+            if (startIdx + SIZE >= float32AudioBuffer.length) {
+                // Audio muy corto, usar lo que haya o fallback
+                startIdx = 0; 
+            }
+            const chunk = float32AudioBuffer.slice(startIdx, startIdx + SIZE);
+            const L = chunk.length;
+
+            // RMS check
+            let rms = 0;
+            for (let i=0; i<L; i++) rms += chunk[i]*chunk[i];
+            rms = Math.sqrt(rms/L);
+            if (rms < 0.01) return -1; // Silencio/Muy bajo
+
+            // Autocorrelación
+            // Rango de interés: 70Hz (630 samples @44.1k) a 1000Hz (44 samples)
+            const minPeriod = Math.floor(sampleRate / 1000); 
+            const maxPeriod = Math.floor(sampleRate / 70); 
+            
+            let bestPeriod = 0;
+            let maxCorr = 0;
+
+            // Correlación simple optimizada
+            for (let lag = minPeriod; lag <= maxPeriod; lag++) {
+                if(lag >= L) break;
+                let sum = 0;
+                // Usamos menos muestras para velocidad (downsample implícito reduciendo iteraciones o loop corto)
+                // Haremos loop completo sobre el chunk disponible
+                for (let i = 0; i < L - lag; i++) {
+                    sum += chunk[i] * chunk[i+lag];
+                }
+                // Normalizar no es estrictamente necesario si solo buscamos pico relativo
+                // pero ayuda si la amplitud decae.
+                // Usamos correlación cruda para simplicidad y rapidez.
+                
+                if (sum > maxCorr) {
+                    maxCorr = sum;
+                    bestPeriod = lag;
+                }
+            }
+
+            // Refinamiento (interpolación parabólica para precisión)
+            // Si bestPeriod es un pico, sus vecinos deberían ser menores.
+            // ... (omitido para simplicidad, precisión de semitono es suficiente con sample rate 44k)
+
+            if (bestPeriod > 0) {
+                const freq = sampleRate / bestPeriod;
+                return freq;
+            }
+            return -1;
+        }
+
+        function freqToMidi(freq) {
+            // Formula MIDI: 69 + 12 * log2(freq / 440)
+            return 69 + 12 * Math.log2(freq / 440);
+        }
+
         // === HELPERS BASE64 ===
         const blobToBase64 = blob => {
             return new Promise((resolve, reject) => {
@@ -254,34 +244,10 @@
                 reader.onerror = error => reject(error);
             });
         };
-
         const base64ToBlob = async (base64) => {
             const res = await fetch(base64);
             return await res.blob();
         };
-
-        // === CONFIGURACIÓN FNF ===
-        const FNF_URLS = [
-            'https://logise1.github.io/fnfstudio/up.wav',
-            'https://logise1.github.io/fnfstudio/down.wav',
-            'https://logise1.github.io/fnfstudio/left.wav',
-            'https://logise1.github.io/fnfstudio/right.wav'
-        ];
-        let fnfBuffers = [];
-
-        // === CONFIGURACIÓN NOTAS ===
-        const NOTE_NAMES = ['B', 'A#', 'A', 'G#', 'G', 'F#', 'F', 'E', 'D#', 'D', 'C#', 'C'];
-        const OCTAVES = [6, 5, 4, 3]; 
-        let FULL_NOTES = [];
-        
-        OCTAVES.forEach(oct => {
-            NOTE_NAMES.forEach(note => {
-                FULL_NOTES.push({ note, oct, name: `${note}${oct}`, isSharp: note.includes('#') });
-            });
-        });
-
-        const BASE_NOTE_FREQ = 391.995; 
-        const BASE_NOTE_MIDI = 67;      
 
         // === ESTADO GLOBAL ===
         let audioCtx;
@@ -293,7 +259,6 @@
         let lookahead = 25.0;
         let scheduleAheadTime = 0.1;
         let timerID;
-        
         let totalSteps = 32; 
         let activeTrackId = 0;
         let tracks = [];
@@ -322,18 +287,32 @@
 
         async function preloadFnfSamples() {
             const ctx = getAudioContext();
-            const promises = FNF_URLS.map(async (url) => {
+            fnfSamplesData = []; // Reset
+
+            const names = ['UP', 'DOWN', 'LEFT', 'RIGHT'];
+            
+            for (let i=0; i<FNF_URLS.length; i++) {
+                const url = FNF_URLS[i];
                 try {
                     const res = await fetch(url);
-                    const arrayBuffer = await res.arrayBuffer();
-                    return await ctx.decodeAudioData(arrayBuffer);
+                    const ab = await res.arrayBuffer();
+                    const buffer = await ctx.decodeAudioData(ab);
+                    
+                    // Detectar Tono
+                    const freq = detectPitch(buffer);
+                    let rootMidi = DEFAULT_ROOT_MIDI;
+                    if (freq > 0) {
+                        rootMidi = freqToMidi(freq);
+                        console.log(`[FNF ${names[i]}] Detectado: ${freq.toFixed(1)} Hz (MIDI: ${rootMidi.toFixed(1)})`);
+                    } else {
+                        console.log(`[FNF ${names[i]}] Tono no detectado, usando default.`);
+                    }
+
+                    fnfSamplesData.push({ buffer, rootMidi });
                 } catch (e) {
                     console.error("Error cargando sample FNF:", url, e);
-                    return null;
                 }
-            });
-            fnfBuffers = (await Promise.all(promises)).filter(b => b !== null);
-            console.log("Samples FNF cargados:", fnfBuffers.length);
+            }
         }
 
         class Track {
@@ -341,7 +320,10 @@
                 this.id = id;
                 this.name = name;
                 this.color = color;
-                this.buffer = null; // Buffer para sample custom
+                
+                this.buffer = null; 
+                this.rootMidi = DEFAULT_ROOT_MIDI; // Tono detectado para sample custom
+
                 this.sourceBlob = null; 
                 this.base64Data = null; 
                 this.sampleUrl = null;
@@ -349,13 +331,12 @@
                 this.muted = false;
                 this.solo = false;
                 this.isLoading = false;
-                this.isRandom = true; // Por defecto usa voces random
+                this.isRandom = true; 
             }
 
-            // Carga desde URL (string) o Blob (objeto)
             async loadSample(input) {
                 this.isLoading = true;
-                this.isRandom = false; // Al cargar uno custom, desactivamos random
+                this.isRandom = false; 
                 renderTrackList(); 
                 
                 try {
@@ -383,9 +364,19 @@
                     }
 
                     this.buffer = await ctx.decodeAudioData(arrayBuffer);
+                    
+                    // Detectar Tono Custom
+                    const freq = detectPitch(this.buffer);
+                    if (freq > 0) {
+                        this.rootMidi = freqToMidi(freq);
+                        console.log(`[Custom ${this.id}] Pitch Detectado: ${freq.toFixed(1)}Hz -> MIDI ${this.rootMidi.toFixed(1)}`);
+                    } else {
+                        this.rootMidi = DEFAULT_ROOT_MIDI;
+                        console.log(`[Custom ${this.id}] Pitch no claro, usando default.`);
+                    }
+
                 } catch (e) {
                     console.error(`Error loading sample for ${this.name}:`, e);
-                    // Si falla, volvemos a random? Mejor fallback silencioso o mantener random
                     this.isRandom = true; 
                 } finally {
                     this.isLoading = false;
@@ -395,13 +386,21 @@
             }
         }
 
-        function getPlaybackRate(targetNoteIndex) {
-            const noteObj = FULL_NOTES[targetNoteIndex];
+        // playRate dinámico basado en MIDI detectado
+        function calculateRate(targetMidi, rootMidi) {
+            // rate = 2 ^ ((target - root) / 12)
+            return Math.pow(2, (targetMidi - rootMidi) / 12);
+        }
+
+        // Obtener MIDI de la celda de la rejilla
+        function getCellMidi(rowIndex) {
+            // FULL_NOTES está ordenado de agudo (index 0) a grave.
+            // Necesitamos saber qué nota es.
+            const noteObj = FULL_NOTES[rowIndex];
             const notesScale = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
             const noteInScale = notesScale.indexOf(noteObj.note);
-            const midiVal = (noteObj.oct + 1) * 12 + noteInScale;
-            const semitones = midiVal - BASE_NOTE_MIDI;
-            return Math.pow(2, semitones / 12);
+            // (Octava + 1) * 12 + Nota
+            return (noteObj.oct + 1) * 12 + noteInScale;
         }
 
         function playSound(track, noteIndex, time, ctx = null, dest = null) {
@@ -411,27 +410,34 @@
             const anySolo = tracks.some(t => t.solo);
             if (anySolo && !track.solo) return;
 
-            let bufferToPlay = null;
+            let bufferToUse = null;
+            let rootMidiToUse = DEFAULT_ROOT_MIDI;
 
-            // Lógica de selección de buffer
-            if (track.isRandom && fnfBuffers.length > 0) {
-                // Elegir uno random de los 4 FNF
-                bufferToPlay = fnfBuffers[Math.floor(Math.random() * fnfBuffers.length)];
+            // Selección de buffer y su tono base
+            if (track.isRandom && fnfSamplesData.length > 0) {
+                // Random FNF
+                const rand = fnfSamplesData[Math.floor(Math.random() * fnfSamplesData.length)];
+                bufferToUse = rand.buffer;
+                rootMidiToUse = rand.rootMidi;
             } else {
-                bufferToPlay = track.buffer;
+                // Custom
+                bufferToUse = track.buffer;
+                rootMidiToUse = track.rootMidi;
             }
 
-            if (!bufferToPlay) return;
+            if (!bufferToUse) return;
 
             const context = ctx || getAudioContext();
             
             try {
                 const source = context.createBufferSource();
-                source.buffer = bufferToPlay;
+                source.buffer = bufferToUse;
                 
-                // Si es random FNF, quizás queremos mantener el pitch original o variarlo
-                // Aplicamos pitch shift igualmente para que sea melódico
-                source.playbackRate.value = getPlaybackRate(noteIndex);
+                // Calcular target MIDI de la nota en el grid
+                const targetMidi = getCellMidi(noteIndex);
+                
+                // Aplicar afinación precisa usando el root detectado para este audio específico
+                source.playbackRate.value = calculateRate(targetMidi, rootMidiToUse);
 
                 const gain = context.createGain();
                 gain.gain.value = 1.0; 
@@ -445,7 +451,6 @@
         }
 
         // === STORAGE MANAGER ===
-
         function saveToLocalStorage() {
             try {
                 const state = {
@@ -460,7 +465,8 @@
                         solo: t.solo,
                         isRandom: t.isRandom,
                         sampleBase64: t.base64Data, 
-                        sampleUrl: t.sampleUrl 
+                        sampleUrl: t.sampleUrl,
+                        rootMidi: t.rootMidi // Guardar tono detectado también
                     }))
                 };
                 localStorage.setItem('minifl_project_v3', JSON.stringify(state));
@@ -485,7 +491,8 @@
                     t.notes = tData.notes || {};
                     t.muted = tData.muted || false;
                     t.solo = tData.solo || false;
-                    t.isRandom = (tData.isRandom !== undefined) ? tData.isRandom : true; // Default to random if undefined
+                    t.isRandom = (tData.isRandom !== undefined) ? tData.isRandom : true;
+                    t.rootMidi = tData.rootMidi || DEFAULT_ROOT_MIDI;
 
                     if (!t.isRandom) {
                         if (tData.sampleBase64) {
@@ -512,7 +519,6 @@
         }
 
         // === SCHEDULER ===
-
         function nextNote() {
             const secondsPerBeat = 60.0 / tempo;
             nextNoteTime += 0.25 * secondsPerBeat; 
@@ -523,7 +529,6 @@
         function scheduleNote(step, time) {
             const ctx = getAudioContext();
             setTimeout(() => drawPlayhead(step), (time - ctx.currentTime) * 1000);
-
             tracks.forEach(track => {
                 for (let i = 0; i < FULL_NOTES.length; i++) {
                     if (track.notes[`${step}_${i}`]) {
@@ -544,32 +549,23 @@
 
         function play() {
             if (isPlaying) { stop(); return; }
-
             const ctx = getAudioContext();
             if(ctx.state === 'suspended') ctx.resume();
-
             isPlaying = true;
             currentStep = 0;
             nextNoteTime = ctx.currentTime;
             scheduler();
-            
-            const btn = document.getElementById('playBtn');
-            btn.classList.add('text-green-300', 'bg-green-900/50');
-            btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>`;
+            document.getElementById('playBtn').classList.add('text-green-300', 'bg-green-900/50');
         }
 
         function stop() {
             isPlaying = false;
             clearTimeout(timerID);
             drawPlayhead(-1);
-            
-            const btn = document.getElementById('playBtn');
-            btn.classList.remove('text-green-300', 'bg-green-900/50');
-            btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>`;
+            document.getElementById('playBtn').classList.remove('text-green-300', 'bg-green-900/50');
         }
 
-        // === EXPORTAR WAV (OFFLINE) ===
-        // ... (Helpers WAV unchanged)
+        // === EXPORTAR WAV & ZIP ===
         function audioBufferToWav(buffer, opt) {
             opt = opt || {};
             var numChannels = buffer.numberOfChannels;
@@ -577,11 +573,8 @@
             var format = opt.float32 ? 3 : 1;
             var bitDepth = format === 3 ? 32 : 16;
             var result;
-            if (numChannels === 2) {
-                result = interleave(buffer.getChannelData(0), buffer.getChannelData(1));
-            } else {
-                result = buffer.getChannelData(0);
-            }
+            if (numChannels === 2) result = interleave(buffer.getChannelData(0), buffer.getChannelData(1));
+            else result = buffer.getChannelData(0);
             return encodeWAV(result, format, sampleRate, numChannels, bitDepth);
         }
         function encodeWAV(samples, format, sampleRate, numChannels, bitDepth) {
@@ -609,8 +602,7 @@
         function interleave(inputL, inputR) {
             var length = inputL.length + inputR.length;
             var result = new Float32Array(length);
-            var index = 0;
-            var inputIndex = 0;
+            var index = 0, inputIndex = 0;
             while (index < length) {
                 result[index++] = inputL[inputIndex];
                 result[index++] = inputR[inputIndex];
@@ -674,11 +666,85 @@
             }
         }
 
-        // === UI RENDERING ===
+        async function saveProjectFile() {
+            const zip = new JSZip();
+            const state = { tempo, totalSteps, tracks: [] };
+
+            for (const t of tracks) {
+                const trackMeta = {
+                    id: t.id, name: t.name, color: t.color, notes: t.notes,
+                    muted: t.muted, solo: t.solo, isRandom: t.isRandom,
+                    rootMidi: t.rootMidi, sampleFileName: null 
+                };
+
+                if (!t.isRandom) {
+                    if (t.sourceBlob) {
+                        const fileName = `sample_${t.id}.wav`; 
+                        zip.file(`samples/${fileName}`, t.sourceBlob);
+                        trackMeta.sampleFileName = fileName;
+                    } else if (t.sampleUrl) {
+                        trackMeta.sampleUrl = t.sampleUrl; 
+                    }
+                }
+                state.tracks.push(trackMeta);
+            }
+            zip.file("project.json", JSON.stringify(state, null, 2));
+            const content = await zip.generateAsync({type:"blob"});
+            const url = URL.createObjectURL(content);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'proyecto.minifl';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+        }
+
+        async function loadProjectFile(e) {
+            const file = e.target.files[0];
+            if(!file) return;
+            try {
+                const zip = await JSZip.loadAsync(file);
+                const projectText = await zip.file("project.json").async("string");
+                const state = JSON.parse(projectText);
+                tempo = state.tempo || 130;
+                totalSteps = state.totalSteps || 32;
+                document.getElementById('tempoInput').value = tempo;
+                tracks = [];
+                for (const tData of state.tracks) {
+                    const t = new Track(tData.id, tData.name, tData.color);
+                    t.notes = tData.notes || {};
+                    t.muted = tData.muted || false;
+                    t.solo = tData.solo || false;
+                    t.isRandom = (tData.isRandom !== undefined) ? tData.isRandom : true;
+                    t.rootMidi = tData.rootMidi || DEFAULT_ROOT_MIDI; // Recuperar tono guardado
+
+                    if (!t.isRandom) {
+                        if (tData.sampleFileName) {
+                            const sampleFile = zip.file(`samples/${tData.sampleFileName}`);
+                            if (sampleFile) {
+                                const blob = await sampleFile.async("blob");
+                                await t.loadSample(blob);
+                            }
+                        } else if (tData.sampleUrl) {
+                            await t.loadSample(tData.sampleUrl);
+                        }
+                    }
+                    tracks.push(t);
+                }
+                if(tracks.length > 0) selectTrack(0);
+                renderGrid();
+                saveToLocalStorage(); 
+                alert("Proyecto cargado con éxito.");
+            } catch(err) {
+                console.error(err);
+                alert("Error al abrir el archivo .minifl (Zip).");
+            }
+            e.target.value = '';
+        }
+
+        // === UI RENDERING & INIT ===
         function renderGrid() {
-            keysContainer.innerHTML = '';
-            pianoGrid.innerHTML = '';
-            timeline.innerHTML = '';
+            keysContainer.innerHTML = ''; pianoGrid.innerHTML = ''; timeline.innerHTML = '';
             const colWidth = 30; 
             pianoGrid.style.gridTemplateColumns = `repeat(${totalSteps}, ${colWidth}px)`;
             pianoGrid.style.width = `${totalSteps * colWidth}px`;
@@ -714,24 +780,10 @@
             const track = tracks[activeTrackId];
             const key = `${col}_${row}`;
             const ctx = getAudioContext();
-            
-            const activate = () => {
-                track.notes[key] = true;
-                cell.classList.add('active');
-                playSound(track, row, ctx.currentTime);
-                saveToLocalStorage(); 
-            };
-            const deactivate = () => {
-                delete track.notes[key];
-                cell.classList.remove('active');
-                saveToLocalStorage(); 
-            };
-            if (isDrag) {
-                if (!track.notes[key]) activate();
-            } else {
-                if (track.notes[key]) deactivate();
-                else activate();
-            }
+            const activate = () => { track.notes[key] = true; cell.classList.add('active'); playSound(track, row, ctx.currentTime); saveToLocalStorage(); };
+            const deactivate = () => { delete track.notes[key]; cell.classList.remove('active'); saveToLocalStorage(); };
+            if (isDrag) { if (!track.notes[key]) activate(); } 
+            else { if (track.notes[key]) deactivate(); else activate(); }
         }
 
         function renderTrackList() {
@@ -752,221 +804,74 @@
 
                 const infoDiv = document.createElement('div');
                 infoDiv.className = "flex-1 min-w-0 flex flex-col justify-center ml-2";
-                
-                // Mostrar si es Random o Custom en el nombre
-                let statusText = t.isRandom ? "FNF Random" : "Custom";
-                infoDiv.innerHTML = `
-                    <div class="text-xs font-bold text-gray-200 truncate select-none">${t.name}</div>
-                    <div class="text-[9px] text-gray-500">${statusText}</div>
-                `;
+                let statusText = t.isRandom ? "FNF Random (Auto-Tune)" : `Custom (Root: ${Math.round(t.rootMidi)})`;
+                infoDiv.innerHTML = `<div class="text-xs font-bold text-gray-200 truncate select-none">${t.name}</div><div class="text-[9px] text-gray-500">${statusText}</div>`;
 
                 const indicator = document.createElement('div');
                 indicator.className = "w-2 h-2 rounded-full mr-2";
                 indicator.style.backgroundColor = t.color;
 
-                row.appendChild(indicator);
-                row.appendChild(btnMute);
-                row.appendChild(btnSolo);
-                row.appendChild(infoDiv);
+                row.appendChild(indicator); row.appendChild(btnMute); row.appendChild(btnSolo); row.appendChild(infoDiv);
                 row.onclick = () => selectTrack(idx);
                 trackList.appendChild(row);
             });
             updateHeader();
         }
 
-        function selectTrack(idx) {
-            activeTrackId = idx;
-            renderTrackList();
-            renderGrid();
-            updateHeader();
-        }
-
+        function selectTrack(idx) { activeTrackId = idx; renderTrackList(); renderGrid(); updateHeader(); }
         function updateHeader() {
             const t = tracks[activeTrackId];
             if(t) {
                 document.getElementById('currentTrackName').textContent = t.name;
-                
-                if (t.isRandom) {
-                    sampleNameDisplay.textContent = 'Voces Random FNF';
-                } else {
-                    sampleNameDisplay.textContent = t.sampleUrl ? (t.sampleUrl.startsWith('blob:') ? 'Audio Custom' : 'Sample Original') : 'Audio Custom';
-                }
+                if (t.isRandom) sampleNameDisplay.textContent = 'Voces Random FNF';
+                else sampleNameDisplay.textContent = t.sampleUrl ? (t.sampleUrl.startsWith('blob:') ? 'Audio Custom' : 'Sample Original') : 'Audio Custom';
             }
         }
-
         function drawPlayhead(step) {
             document.querySelectorAll('.time-marker.current').forEach(el => el.classList.remove('current'));
             if (step !== -1) {
                 const el = document.getElementById(`time-${step}`);
                 if (el) {
                     el.classList.add('current');
-                    if (step % 8 === 0) {
-                        const center = el.offsetLeft - (gridScrollArea.offsetWidth / 2) + 15;
-                        gridScrollArea.scrollLeft = center;
-                    }
+                    if (step % 8 === 0) gridScrollArea.scrollLeft = el.offsetLeft - (gridScrollArea.offsetWidth / 2) + 15;
                 }
             }
         }
 
-        // === GESTIÓN DE PROYECTOS (.minifl = ZIP) ===
-
         function addTrack(name = "Instrumento") {
             const id = tracks.length;
             const newTrack = new Track(id, name);
-            // Por defecto, newTrack.isRandom es true. No cargamos nada.
             tracks.push(newTrack);
             renderTrackList();
             if (tracks.length === 1) renderGrid();
             saveToLocalStorage();
         }
 
-        async function saveProjectFile() {
-            const zip = new JSZip();
-            
-            const state = {
-                tempo,
-                totalSteps,
-                tracks: []
-            };
-
-            for (const t of tracks) {
-                const trackMeta = {
-                    id: t.id,
-                    name: t.name,
-                    color: t.color,
-                    notes: t.notes,
-                    muted: t.muted,
-                    solo: t.solo,
-                    isRandom: t.isRandom,
-                    sampleFileName: null 
-                };
-
-                if (!t.isRandom) {
-                    if (t.sourceBlob) {
-                        const fileName = `sample_${t.id}.wav`; 
-                        zip.file(`samples/${fileName}`, t.sourceBlob);
-                        trackMeta.sampleFileName = fileName;
-                    } else if (t.sampleUrl) {
-                        trackMeta.sampleUrl = t.sampleUrl; 
-                    }
-                }
-
-                state.tracks.push(trackMeta);
-            }
-
-            zip.file("project.json", JSON.stringify(state, null, 2));
-
-            const content = await zip.generateAsync({type:"blob"});
-            const url = URL.createObjectURL(content);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'proyecto.minifl';
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-        }
-
-        async function loadProjectFile(e) {
-            const file = e.target.files[0];
-            if(!file) return;
-
-            try {
-                const zip = await JSZip.loadAsync(file);
-                
-                const projectText = await zip.file("project.json").async("string");
-                const state = JSON.parse(projectText);
-
-                tempo = state.tempo || 130;
-                totalSteps = state.totalSteps || 32;
-                document.getElementById('tempoInput').value = tempo;
-
-                tracks = [];
-                for (const tData of state.tracks) {
-                    const t = new Track(tData.id, tData.name, tData.color);
-                    t.notes = tData.notes || {};
-                    t.muted = tData.muted || false;
-                    t.solo = tData.solo || false;
-                    t.isRandom = (tData.isRandom !== undefined) ? tData.isRandom : true;
-
-                    if (!t.isRandom) {
-                        if (tData.sampleFileName) {
-                            const sampleFile = zip.file(`samples/${tData.sampleFileName}`);
-                            if (sampleFile) {
-                                const blob = await sampleFile.async("blob");
-                                await t.loadSample(blob);
-                            }
-                        } else if (tData.sampleUrl) {
-                            await t.loadSample(tData.sampleUrl);
-                        }
-                    }
-                    tracks.push(t);
-                }
-
-                if(tracks.length > 0) selectTrack(0);
-                renderGrid();
-                saveToLocalStorage(); 
-                alert("Proyecto cargado con éxito.");
-
-            } catch(err) {
-                console.error(err);
-                alert("Error al abrir el archivo .minifl (Zip).");
-            }
-            e.target.value = '';
-        }
-
         async function initApp() {
-            // Asegurar que FNF samples se carguen al inicio (o cuando haya contexto)
-            // preloadFnfSamples se llamará tras click de inicio
-            
             const loaded = await loadFromLocalStorage();
-            if (!loaded) addTrack("Lead Synth"); // Por defecto entra en modo Random
-            
-            gridScrollArea.addEventListener('scroll', () => {
-                keysContainer.scrollTop = gridScrollArea.scrollTop;
-            });
-
+            if (!loaded) addTrack("Lead Synth");
+            gridScrollArea.addEventListener('scroll', () => { keysContainer.scrollTop = gridScrollArea.scrollTop; });
             document.getElementById('playBtn').onclick = play;
             document.getElementById('stopBtn').onclick = stop;
             document.getElementById('recBtn').onclick = renderAudio;
             document.getElementById('addTrackBtn').onclick = () => addTrack(`Inst ${tracks.length + 1}`);
-            
-            document.getElementById('addBarsBtn').onclick = () => { 
-                totalSteps += 16; 
-                renderGrid(); 
-                saveToLocalStorage(); 
-            };
-            
-            document.getElementById('tempoInput').onchange = (e) => { 
-                tempo = parseInt(e.target.value); 
-                saveToLocalStorage(); 
-            };
-            
+            document.getElementById('addBarsBtn').onclick = () => { totalSteps += 16; renderGrid(); saveToLocalStorage(); };
+            document.getElementById('tempoInput').onchange = (e) => { tempo = parseInt(e.target.value); saveToLocalStorage(); };
             document.getElementById('masterVol').oninput = (e) => masterGain.gain.value = e.target.value;
-            
             document.getElementById('sampleInput').onchange = (e) => {
                 const f = e.target.files[0];
-                if(f) {
-                    tracks[activeTrackId].name = f.name.substring(0,12);
-                    tracks[activeTrackId].loadSample(f);
-                }
+                if(f) { tracks[activeTrackId].name = f.name.substring(0,12); tracks[activeTrackId].loadSample(f); }
             };
-
             document.getElementById('saveProjectBtn').onclick = saveProjectFile;
             document.getElementById('loadProjectInput').onchange = loadProjectFile;
-            document.getElementById('resetBtn').onclick = () => {
-                if(confirm("¿Borrar todo y reiniciar?")) clearLocalStorage();
-            };
+            document.getElementById('resetBtn').onclick = () => { if(confirm("¿Borrar todo y reiniciar?")) clearLocalStorage(); };
         }
 
         window.onload = initApp;
-
         startAppBtn.onclick = () => {
             const ctx = getAudioContext();
             try { ctx.resume(); } catch(e) {}
-            
-            // Cargar samples FNF ahora que tenemos interaccion
             preloadFnfSamples();
-
             startOverlay.style.opacity = '0';
             startOverlay.style.pointerEvents = 'none';
             setTimeout(() => startOverlay.classList.add('hidden'), 500);
