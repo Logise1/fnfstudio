@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mini FL Studio Pro (Auto-Tune)</title>
+    <title>Mini FL Studio Pro (Fixed Export)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <style>
@@ -147,7 +147,6 @@
             'https://logise1.github.io/fnfstudio/right.wav'
         ];
         
-        // Almacenará objetos { buffer: AudioBuffer, rootMidi: number }
         let fnfSamplesData = [];
 
         const NOTE_NAMES = ['B', 'A#', 'A', 'G#', 'G', 'F#', 'F', 'E', 'D#', 'D', 'C#', 'C'];
@@ -159,15 +158,12 @@
             });
         });
 
-        // Este será el fallback si no se detecta pitch
-        const DEFAULT_ROOT_MIDI = 65; // ~F4 (pitch medio común)
+        const DEFAULT_ROOT_MIDI = 65; 
 
-        // === PITCH DETECTION ALGORITHM (Autocorrelation) ===
+        // === PITCH DETECTION ===
         function detectPitch(buffer) {
             const float32AudioBuffer = buffer.getChannelData(0);
             const sampleRate = buffer.sampleRate;
-            
-            // Buscar inicio de sonido real (RMS > 0.01) para evitar silencio inicial
             let startIdx = 0;
             const threshold = 0.05;
             for(let i=0; i<float32AudioBuffer.length; i++) {
@@ -176,74 +172,41 @@
                     break;
                 }
             }
-
-            // Tomar un chunk de 4096 samples desde el inicio del sonido
             const SIZE = 4096;
-            if (startIdx + SIZE >= float32AudioBuffer.length) {
-                // Audio muy corto, usar lo que haya o fallback
-                startIdx = 0; 
-            }
+            if (startIdx + SIZE >= float32AudioBuffer.length) startIdx = 0; 
             const chunk = float32AudioBuffer.slice(startIdx, startIdx + SIZE);
             const L = chunk.length;
-
-            // RMS check
             let rms = 0;
             for (let i=0; i<L; i++) rms += chunk[i]*chunk[i];
             rms = Math.sqrt(rms/L);
-            if (rms < 0.01) return -1; // Silencio/Muy bajo
+            if (rms < 0.01) return -1; 
 
-            // Autocorrelación
-            // Rango de interés: 70Hz (630 samples @44.1k) a 1000Hz (44 samples)
             const minPeriod = Math.floor(sampleRate / 1000); 
             const maxPeriod = Math.floor(sampleRate / 70); 
-            
             let bestPeriod = 0;
             let maxCorr = 0;
 
-            // Correlación simple optimizada
             for (let lag = minPeriod; lag <= maxPeriod; lag++) {
                 if(lag >= L) break;
                 let sum = 0;
-                // Usamos menos muestras para velocidad (downsample implícito reduciendo iteraciones o loop corto)
-                // Haremos loop completo sobre el chunk disponible
-                for (let i = 0; i < L - lag; i++) {
-                    sum += chunk[i] * chunk[i+lag];
-                }
-                // Normalizar no es estrictamente necesario si solo buscamos pico relativo
-                // pero ayuda si la amplitud decae.
-                // Usamos correlación cruda para simplicidad y rapidez.
-                
-                if (sum > maxCorr) {
-                    maxCorr = sum;
-                    bestPeriod = lag;
-                }
+                for (let i = 0; i < L - lag; i++) sum += chunk[i] * chunk[i+lag];
+                if (sum > maxCorr) { maxCorr = sum; bestPeriod = lag; }
             }
-
-            // Refinamiento (interpolación parabólica para precisión)
-            // Si bestPeriod es un pico, sus vecinos deberían ser menores.
-            // ... (omitido para simplicidad, precisión de semitono es suficiente con sample rate 44k)
-
-            if (bestPeriod > 0) {
-                const freq = sampleRate / bestPeriod;
-                return freq;
-            }
+            if (bestPeriod > 0) return sampleRate / bestPeriod;
             return -1;
         }
 
         function freqToMidi(freq) {
-            // Formula MIDI: 69 + 12 * log2(freq / 440)
             return 69 + 12 * Math.log2(freq / 440);
         }
 
         // === HELPERS BASE64 ===
-        const blobToBase64 = blob => {
-            return new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                reader.readAsDataURL(blob);
-                reader.onload = () => resolve(reader.result);
-                reader.onerror = error => reject(error);
-            });
-        };
+        const blobToBase64 = blob => new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.readAsDataURL(blob);
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = error => reject(error);
+        });
         const base64ToBlob = async (base64) => {
             const res = await fetch(base64);
             return await res.blob();
@@ -287,8 +250,7 @@
 
         async function preloadFnfSamples() {
             const ctx = getAudioContext();
-            fnfSamplesData = []; // Reset
-
+            fnfSamplesData = []; 
             const names = ['UP', 'DOWN', 'LEFT', 'RIGHT'];
             
             for (let i=0; i<FNF_URLS.length; i++) {
@@ -297,17 +259,9 @@
                     const res = await fetch(url);
                     const ab = await res.arrayBuffer();
                     const buffer = await ctx.decodeAudioData(ab);
-                    
-                    // Detectar Tono
                     const freq = detectPitch(buffer);
                     let rootMidi = DEFAULT_ROOT_MIDI;
-                    if (freq > 0) {
-                        rootMidi = freqToMidi(freq);
-                        console.log(`[FNF ${names[i]}] Detectado: ${freq.toFixed(1)} Hz (MIDI: ${rootMidi.toFixed(1)})`);
-                    } else {
-                        console.log(`[FNF ${names[i]}] Tono no detectado, usando default.`);
-                    }
-
+                    if (freq > 0) rootMidi = freqToMidi(freq);
                     fnfSamplesData.push({ buffer, rootMidi });
                 } catch (e) {
                     console.error("Error cargando sample FNF:", url, e);
@@ -320,10 +274,8 @@
                 this.id = id;
                 this.name = name;
                 this.color = color;
-                
                 this.buffer = null; 
-                this.rootMidi = DEFAULT_ROOT_MIDI; // Tono detectado para sample custom
-
+                this.rootMidi = DEFAULT_ROOT_MIDI; 
                 this.sourceBlob = null; 
                 this.base64Data = null; 
                 this.sampleUrl = null;
@@ -338,11 +290,9 @@
                 this.isLoading = true;
                 this.isRandom = false; 
                 renderTrackList(); 
-                
                 try {
                     const ctx = getAudioContext();
                     let arrayBuffer;
-
                     if (input instanceof Blob) {
                         this.sourceBlob = input;
                         this.sampleUrl = null; 
@@ -362,19 +312,10 @@
                             this.base64Data = await blobToBase64(this.sourceBlob);
                         }
                     }
-
                     this.buffer = await ctx.decodeAudioData(arrayBuffer);
-                    
-                    // Detectar Tono Custom
                     const freq = detectPitch(this.buffer);
-                    if (freq > 0) {
-                        this.rootMidi = freqToMidi(freq);
-                        console.log(`[Custom ${this.id}] Pitch Detectado: ${freq.toFixed(1)}Hz -> MIDI ${this.rootMidi.toFixed(1)}`);
-                    } else {
-                        this.rootMidi = DEFAULT_ROOT_MIDI;
-                        console.log(`[Custom ${this.id}] Pitch no claro, usando default.`);
-                    }
-
+                    if (freq > 0) this.rootMidi = freqToMidi(freq);
+                    else this.rootMidi = DEFAULT_ROOT_MIDI;
                 } catch (e) {
                     console.error(`Error loading sample for ${this.name}:`, e);
                     this.isRandom = true; 
@@ -386,41 +327,34 @@
             }
         }
 
-        // playRate dinámico basado en MIDI detectado
-        function calculateRate(targetMidi, rootMidi) {
-            // rate = 2 ^ ((target - root) / 12)
+        function getPlaybackRate(targetMidi, rootMidi) {
             return Math.pow(2, (targetMidi - rootMidi) / 12);
         }
 
-        // Obtener MIDI de la celda de la rejilla
         function getCellMidi(rowIndex) {
-            // FULL_NOTES está ordenado de agudo (index 0) a grave.
-            // Necesitamos saber qué nota es.
             const noteObj = FULL_NOTES[rowIndex];
             const notesScale = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
             const noteInScale = notesScale.indexOf(noteObj.note);
-            // (Octava + 1) * 12 + Nota
             return (noteObj.oct + 1) * 12 + noteInScale;
         }
 
         function playSound(track, noteIndex, time, ctx = null, dest = null) {
             if (track.muted) return;
-            
-            // Check solo
             const anySolo = tracks.some(t => t.solo);
             if (anySolo && !track.solo) return;
 
             let bufferToUse = null;
             let rootMidiToUse = DEFAULT_ROOT_MIDI;
 
-            // Selección de buffer y su tono base
-            if (track.isRandom && fnfSamplesData.length > 0) {
-                // Random FNF
-                const rand = fnfSamplesData[Math.floor(Math.random() * fnfSamplesData.length)];
-                bufferToUse = rand.buffer;
-                rootMidiToUse = rand.rootMidi;
+            if (track.isRandom) {
+                if (fnfSamplesData.length > 0) {
+                    const rand = fnfSamplesData[Math.floor(Math.random() * fnfSamplesData.length)];
+                    bufferToUse = rand.buffer;
+                    rootMidiToUse = rand.rootMidi;
+                } else {
+                    return; // Si no hay samples FNF cargados, no sonar nada (evita crash)
+                }
             } else {
-                // Custom
                 bufferToUse = track.buffer;
                 rootMidiToUse = track.rootMidi;
             }
@@ -428,63 +362,44 @@
             if (!bufferToUse) return;
 
             const context = ctx || getAudioContext();
-            
             try {
                 const source = context.createBufferSource();
                 source.buffer = bufferToUse;
-                
-                // Calcular target MIDI de la nota en el grid
                 const targetMidi = getCellMidi(noteIndex);
-                
-                // Aplicar afinación precisa usando el root detectado para este audio específico
-                source.playbackRate.value = calculateRate(targetMidi, rootMidiToUse);
-
+                source.playbackRate.value = getPlaybackRate(targetMidi, rootMidiToUse);
                 const gain = context.createGain();
                 gain.gain.value = 1.0; 
-
                 source.connect(gain);
                 if (dest) gain.connect(dest);
                 else gain.connect(masterGain);
-                
                 source.start(time);
             } catch(e) { }
         }
 
-        // === STORAGE MANAGER ===
+        // === STORAGE & INIT ===
         function saveToLocalStorage() {
             try {
                 const state = {
                     tempo,
                     totalSteps,
                     tracks: tracks.map(t => ({
-                        id: t.id,
-                        name: t.name,
-                        color: t.color,
-                        notes: t.notes,
-                        muted: t.muted,
-                        solo: t.solo,
-                        isRandom: t.isRandom,
-                        sampleBase64: t.base64Data, 
-                        sampleUrl: t.sampleUrl,
-                        rootMidi: t.rootMidi // Guardar tono detectado también
+                        id: t.id, name: t.name, color: t.color, notes: t.notes,
+                        muted: t.muted, solo: t.solo, isRandom: t.isRandom,
+                        sampleBase64: t.base64Data, sampleUrl: t.sampleUrl, rootMidi: t.rootMidi
                     }))
                 };
                 localStorage.setItem('minifl_project_v3', JSON.stringify(state));
-            } catch (e) {
-                console.warn("Storage quota exceeded", e);
-            }
+            } catch (e) {}
         }
 
         async function loadFromLocalStorage() {
             const raw = localStorage.getItem('minifl_project_v3');
             if(!raw) return false;
-
             try {
                 const state = JSON.parse(raw);
                 tempo = state.tempo || 130;
                 totalSteps = state.totalSteps || 32;
                 document.getElementById('tempoInput').value = tempo;
-
                 tracks = [];
                 for (const tData of state.tracks) {
                     const t = new Track(tData.id, tData.name, tData.color);
@@ -493,30 +408,19 @@
                     t.solo = tData.solo || false;
                     t.isRandom = (tData.isRandom !== undefined) ? tData.isRandom : true;
                     t.rootMidi = tData.rootMidi || DEFAULT_ROOT_MIDI;
-
                     if (!t.isRandom) {
-                        if (tData.sampleBase64) {
-                            await t.loadSample(tData.sampleBase64);
-                        } else if (tData.sampleUrl) {
-                            await t.loadSample(tData.sampleUrl);
-                        }
+                        if (tData.sampleBase64) await t.loadSample(tData.sampleBase64);
+                        else if (tData.sampleUrl) await t.loadSample(tData.sampleUrl);
                     }
                     tracks.push(t);
                 }
-                
                 if(tracks.length > 0) selectTrack(0);
                 renderGrid();
                 return true;
-            } catch(e) {
-                console.error("Error loading localStorage", e);
-                return false;
-            }
+            } catch(e) { return false; }
         }
 
-        function clearLocalStorage() {
-            localStorage.removeItem('minifl_project_v3');
-            location.reload();
-        }
+        function clearLocalStorage() { localStorage.removeItem('minifl_project_v3'); location.reload(); }
 
         // === SCHEDULER ===
         function nextNote() {
@@ -525,19 +429,15 @@
             currentStep++;
             if (currentStep >= totalSteps) currentStep = 0; 
         }
-
         function scheduleNote(step, time) {
             const ctx = getAudioContext();
             setTimeout(() => drawPlayhead(step), (time - ctx.currentTime) * 1000);
             tracks.forEach(track => {
                 for (let i = 0; i < FULL_NOTES.length; i++) {
-                    if (track.notes[`${step}_${i}`]) {
-                        playSound(track, i, time);
-                    }
+                    if (track.notes[`${step}_${i}`]) playSound(track, i, time);
                 }
             });
         }
-
         function scheduler() {
             const ctx = getAudioContext();
             while (nextNoteTime < ctx.currentTime + scheduleAheadTime) {
@@ -546,7 +446,6 @@
             }
             if (isPlaying) timerID = setTimeout(scheduler, lookahead);
         }
-
         function play() {
             if (isPlaying) { stop(); return; }
             const ctx = getAudioContext();
@@ -557,7 +456,6 @@
             scheduler();
             document.getElementById('playBtn').classList.add('text-green-300', 'bg-green-900/50');
         }
-
         function stop() {
             isPlaying = false;
             clearTimeout(timerID);
@@ -565,91 +463,92 @@
             document.getElementById('playBtn').classList.remove('text-green-300', 'bg-green-900/50');
         }
 
-        // === EXPORTAR WAV & ZIP ===
-        function audioBufferToWav(buffer, opt) {
-            opt = opt || {};
-            var numChannels = buffer.numberOfChannels;
-            var sampleRate = buffer.sampleRate;
-            var format = opt.float32 ? 3 : 1;
-            var bitDepth = format === 3 ? 32 : 16;
-            var result;
-            if (numChannels === 2) result = interleave(buffer.getChannelData(0), buffer.getChannelData(1));
-            else result = buffer.getChannelData(0);
-            return encodeWAV(result, format, sampleRate, numChannels, bitDepth);
-        }
-        function encodeWAV(samples, format, sampleRate, numChannels, bitDepth) {
-            var bytesPerSample = bitDepth / 8;
-            var blockAlign = numChannels * bytesPerSample;
-            var buffer = new ArrayBuffer(44 + samples.length * bytesPerSample);
-            var view = new DataView(buffer);
-            writeString(view, 0, 'RIFF');
-            view.setUint32(4, 36 + samples.length * bytesPerSample, true);
-            writeString(view, 8, 'WAVE');
-            writeString(view, 12, 'fmt ');
-            view.setUint32(16, 16, true);
-            view.setUint16(20, format, true);
-            view.setUint16(22, numChannels, true);
-            view.setUint32(24, sampleRate, true);
-            view.setUint32(28, sampleRate * blockAlign, true);
-            view.setUint16(32, blockAlign, true);
-            view.setUint16(34, bitDepth, true);
-            writeString(view, 36, 'data');
-            view.setUint32(40, samples.length * bytesPerSample, true);
-            if (format === 1) floatTo16BitPCM(view, 44, samples);
-            else writeFloat32(view, 44, samples);
-            return buffer;
-        }
-        function interleave(inputL, inputR) {
-            var length = inputL.length + inputR.length;
-            var result = new Float32Array(length);
-            var index = 0, inputIndex = 0;
-            while (index < length) {
-                result[index++] = inputL[inputIndex];
-                result[index++] = inputR[inputIndex];
-                inputIndex++;
+        // === EXPORTAR WAV (CORREGIDO) ===
+        // Función estándar y robusta para WAV 16-bit PCM
+        function bufferToWav(buffer, len) {
+            let numOfChan = buffer.numberOfChannels,
+                length = len * numOfChan * 2 + 44,
+                bufferArr = new ArrayBuffer(length),
+                view = new DataView(bufferArr),
+                channels = [], i, sample, offset = 0, pos = 0;
+
+            // Headers WAV PCM
+            setUint32(0x46464952); // "RIFF"
+            setUint32(length - 8); // file length - 8
+            setUint32(0x45564157); // "WAVE"
+            setUint32(0x20746d66); // "fmt " chunk
+            setUint32(16); // length = 16
+            setUint16(1); // PCM (uncompressed)
+            setUint16(numOfChan);
+            setUint32(buffer.sampleRate);
+            setUint32(buffer.sampleRate * 2 * numOfChan); // avg. bytes/sec
+            setUint16(numOfChan * 2); // block-align
+            setUint16(16); // 16-bit
+            setUint32(0x61746164); // "data" - chunk
+            setUint32(length - pos - 4); // chunk length
+
+            // Escribir datos entrelazados
+            for(i = 0; i < numOfChan; i++) channels.push(buffer.getChannelData(i));
+
+            while(pos < len) {
+                for(i = 0; i < numOfChan; i++) {
+                    sample = Math.max(-1, Math.min(1, channels[i][pos])); // clamp
+                    sample = (0.5 + sample < 0 ? sample * 32768 : sample * 32767) | 0; // to PCM
+                    view.setInt16(offset, sample, true); 
+                    offset += 2;
+                }
+                pos++;
             }
-            return result;
+
+            return new Blob([bufferArr], { type: 'audio/wav' });
+
+            function setUint16(data) { view.setUint16(pos, data, true); pos += 2; }
+            function setUint32(data) { view.setUint32(pos, data, true); pos += 4; }
         }
-        function writeString(view, offset, string) {
-            for (var i = 0; i < string.length; i++) view.setUint8(offset + i, string.charCodeAt(i));
-        }
-        function floatTo16BitPCM(output, offset, input) {
-            for (var i = 0; i < input.length; i++, offset += 2) {
-                var s = Math.max(-1, Math.min(1, input[i]));
-                output.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
-            }
-        }
-        function writeFloat32(output, offset, input) {
-            for (var i = 0; i < input.length; i++, offset += 4) output.setFloat32(offset, input[i], true);
-        }
-        
+
         async function renderAudio() {
             if (isPlaying) stop();
             if (!confirm("¿Renderizar proyecto a .wav?")) return;
-            const secondsPerBeat = 60.0 / tempo;
-            const totalDuration = totalSteps * 0.25 * secondsPerBeat;
-            const sr = 44100;
-            const offlineCtx = new OfflineAudioContext(2, sr * (totalDuration + 1), sr);
             
-            tracks.forEach(track => {
-                if (track.muted) return;
-                const anySolo = tracks.some(t => t.solo);
-                if (anySolo && !track.solo) return;
-                for (let step = 0; step < totalSteps; step++) {
-                     const time = step * 0.25 * secondsPerBeat;
-                     for (let i = 0; i < FULL_NOTES.length; i++) {
-                        if (track.notes[`${step}_${i}`]) {
-                            playSound(track, i, time, offlineCtx, offlineCtx.destination);
+            const btn = document.getElementById('recBtn');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = `<span class="animate-pulse text-red-500">...</span>`;
+
+            try {
+                // Configurar contexto offline
+                const secondsPerBeat = 60.0 / tempo;
+                // Calculamos duración exacta basada en el último paso que tenga una nota, o totalSteps
+                const totalDuration = totalSteps * 0.25 * secondsPerBeat;
+                const sr = 44100;
+                
+                // +2 segundos de cola para reverb/release
+                const offlineCtx = new OfflineAudioContext(2, sr * (totalDuration + 2), sr);
+
+                // Programar notas
+                console.log("Programando notas...");
+                tracks.forEach(track => {
+                    if (track.muted) return;
+                    const anySolo = tracks.some(t => t.solo);
+                    if (anySolo && !track.solo) return;
+                    
+                    for (let step = 0; step < totalSteps; step++) {
+                        const time = step * 0.25 * secondsPerBeat;
+                        for (let i = 0; i < FULL_NOTES.length; i++) {
+                            if (track.notes[`${step}_${i}`]) {
+                                playSound(track, i, time, offlineCtx, offlineCtx.destination);
+                            }
                         }
                     }
-                }
-            });
+                });
 
-            startAppBtn.textContent = "Renderizando...";
-            try {
+                console.log("Renderizando audio...");
                 const renderedBuffer = await offlineCtx.startRendering();
-                const wavData = audioBufferToWav(renderedBuffer);
-                const blob = new Blob([wavData], { type: 'audio/wav' });
+                
+                console.log("Codificando WAV...");
+                // Usamos la función robusta corregida
+                const blob = bufferToWav(renderedBuffer, renderedBuffer.length);
+                
+                console.log("Descargando...");
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
@@ -657,26 +556,24 @@
                 document.body.appendChild(a);
                 a.click();
                 document.body.removeChild(a);
-                alert("¡Exportación completada!");
+                
             } catch (e) {
-                console.error(e);
-                alert("Error renderizando audio.");
+                console.error("Error exportando:", e);
+                alert("Error al exportar el audio. Mira la consola para detalles.");
             } finally {
-                 startAppBtn.textContent = "ACTIVAR SONIDO"; 
+                btn.innerHTML = originalText;
             }
         }
 
         async function saveProjectFile() {
             const zip = new JSZip();
             const state = { tempo, totalSteps, tracks: [] };
-
             for (const t of tracks) {
                 const trackMeta = {
                     id: t.id, name: t.name, color: t.color, notes: t.notes,
                     muted: t.muted, solo: t.solo, isRandom: t.isRandom,
                     rootMidi: t.rootMidi, sampleFileName: null 
                 };
-
                 if (!t.isRandom) {
                     if (t.sourceBlob) {
                         const fileName = `sample_${t.id}.wav`; 
@@ -716,8 +613,7 @@
                     t.muted = tData.muted || false;
                     t.solo = tData.solo || false;
                     t.isRandom = (tData.isRandom !== undefined) ? tData.isRandom : true;
-                    t.rootMidi = tData.rootMidi || DEFAULT_ROOT_MIDI; // Recuperar tono guardado
-
+                    t.rootMidi = tData.rootMidi || DEFAULT_ROOT_MIDI;
                     if (!t.isRandom) {
                         if (tData.sampleFileName) {
                             const sampleFile = zip.file(`samples/${tData.sampleFileName}`);
@@ -725,9 +621,7 @@
                                 const blob = await sampleFile.async("blob");
                                 await t.loadSample(blob);
                             }
-                        } else if (tData.sampleUrl) {
-                            await t.loadSample(tData.sampleUrl);
-                        }
+                        } else if (tData.sampleUrl) await t.loadSample(tData.sampleUrl);
                     }
                     tracks.push(t);
                 }
@@ -735,14 +629,11 @@
                 renderGrid();
                 saveToLocalStorage(); 
                 alert("Proyecto cargado con éxito.");
-            } catch(err) {
-                console.error(err);
-                alert("Error al abrir el archivo .minifl (Zip).");
-            }
+            } catch(err) { alert("Error al abrir .minifl"); }
             e.target.value = '';
         }
 
-        // === UI RENDERING & INIT ===
+        // === UI & INIT ===
         function renderGrid() {
             keysContainer.innerHTML = ''; pianoGrid.innerHTML = ''; timeline.innerHTML = '';
             const colWidth = 30; 
@@ -791,26 +682,21 @@
             tracks.forEach((t, idx) => {
                 const row = document.createElement('div');
                 row.className = `channel-row ${idx === activeTrackId ? 'selected' : ''}`;
-                
                 const btnMute = document.createElement('div');
                 btnMute.className = `track-control-btn btn-mute ${t.muted ? 'active' : ''}`;
                 btnMute.textContent = 'M';
                 btnMute.onclick = (e) => { e.stopPropagation(); t.muted = !t.muted; saveToLocalStorage(); renderTrackList(); };
-
                 const btnSolo = document.createElement('div');
                 btnSolo.className = `track-control-btn btn-solo ${t.solo ? 'active' : ''}`;
                 btnSolo.textContent = 'S';
                 btnSolo.onclick = (e) => { e.stopPropagation(); t.solo = !t.solo; saveToLocalStorage(); renderTrackList(); };
-
                 const infoDiv = document.createElement('div');
                 infoDiv.className = "flex-1 min-w-0 flex flex-col justify-center ml-2";
-                let statusText = t.isRandom ? "FNF Random (Auto-Tune)" : `Custom (Root: ${Math.round(t.rootMidi)})`;
+                let statusText = t.isRandom ? "FNF Random" : `Custom (Root: ${Math.round(t.rootMidi)})`;
                 infoDiv.innerHTML = `<div class="text-xs font-bold text-gray-200 truncate select-none">${t.name}</div><div class="text-[9px] text-gray-500">${statusText}</div>`;
-
                 const indicator = document.createElement('div');
                 indicator.className = "w-2 h-2 rounded-full mr-2";
                 indicator.style.backgroundColor = t.color;
-
                 row.appendChild(indicator); row.appendChild(btnMute); row.appendChild(btnSolo); row.appendChild(infoDiv);
                 row.onclick = () => selectTrack(idx);
                 trackList.appendChild(row);
