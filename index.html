@@ -1,0 +1,949 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mini FL Studio Pro (Fixed Final)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* --- ESTILOS GENERALES --- */
+        body {
+            background-color: #121212;
+            color: #d4d4d4;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow: hidden;
+            user-select: none;
+        }
+
+        /* Scrollbars */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #1e1e1e; }
+        ::-webkit-scrollbar-thumb { background: #444; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #555; }
+
+        /* --- UI COMPONENTS --- */
+        .btn-fl {
+            @apply px-3 py-1 rounded text-xs font-bold transition-all border border-[#444] bg-[#333] text-gray-200;
+        }
+        .btn-fl:hover { @apply bg-[#444] border-[#555]; }
+        .btn-fl:active { @apply transform translate-y-[1px]; }
+        
+        .btn-icon { @apply p-2 flex items-center justify-center transition-colors; }
+
+        /* --- CHANNEL RACK (FIXED LAYOUT) --- */
+        .channel-row {
+            /* Diseño flex rígido para evitar deformaciones */
+            display: flex;
+            align-items: center;
+            height: 48px; /* Altura fija */
+            padding: 0 12px;
+            border-bottom: 1px solid #2a2a2a;
+            background-color: #1e1e1e;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        .channel-row:hover { background-color: #252525; }
+        .channel-row.selected {
+            background-color: #2a2a2a;
+            border-left: 4px solid #22c55e;
+            padding-left: 8px; /* Compensar borde */
+        }
+        
+        /* Botones M/S */
+        .track-control-btn {
+            width: 20px;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            font-weight: bold;
+            border-radius: 2px;
+            border: 1px solid #444;
+            color: #888;
+            margin-right: 4px;
+            transition: all 0.1s;
+        }
+        .track-control-btn:hover { color: white; border-color: #666; }
+        
+        .btn-mute.active { background-color: #ef4444; border-color: #b91c1c; color: white; } /* Rojo */
+        .btn-solo.active { background-color: #22c55e; border-color: #15803d; color: white; } /* Verde */
+
+        /* --- PIANO ROLL --- */
+        .grid-wrapper {
+            display: grid;
+            grid-template-columns: 60px 1fr; 
+            height: 100%;
+            overflow: hidden;
+        }
+
+        .keys-container {
+            background: #181818;
+            border-right: 1px solid #333;
+            z-index: 10;
+            overflow: hidden; 
+        }
+
+        .grid-scroll-area {
+            overflow: auto;
+            position: relative;
+            background: #141414;
+        }
+
+        .piano-grid {
+            display: grid;
+            background-color: #1e1e1e;
+        }
+
+        /* Celdas */
+        .cell {
+            height: 24px;
+            background-color: #222;
+            border-right: 1px solid #2a2a2a;
+            border-bottom: 1px solid #2a2a2a;
+            position: relative;
+        }
+        .cell.row-sharp { background-color: #1a1a1a; }
+        .cell.beat-start { border-left: 1px solid #3d3d3d; }
+        .cell:hover { background-color: #333; }
+
+        .cell.active {
+            background-color: #4ade80;
+            border: 1px solid #22c55e;
+            box-shadow: inset 0 0 4px rgba(0,0,0,0.5);
+            z-index: 5;
+        }
+
+        /* Teclas del piano */
+        .piano-key {
+            height: 24px;
+            border-bottom: 1px solid #333;
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            padding-right: 4px;
+            font-size: 10px;
+            color: #888;
+            background: #2d2d2d;
+            position: relative;
+        }
+        .piano-key.sharp {
+            background: #111;
+            color: #666;
+        }
+        .piano-key span { z-index: 2; }
+
+        /* Timeline */
+        .timeline {
+            height: 24px;
+            background: #1a1a1a;
+            border-bottom: 1px solid #444;
+            display: flex;
+            position: sticky;
+            top: 0;
+            z-index: 20;
+        }
+        .time-marker {
+            flex-shrink: 0;
+            border-right: 1px solid #333;
+            font-size: 9px;
+            color: #666;
+            display: flex;
+            align-items: center;
+            padding-left: 4px;
+        }
+        .time-marker.current { background: rgba(245, 158, 11, 0.3); border-bottom: 2px solid #f59e0b; }
+
+        /* Start Overlay */
+        #startOverlay {
+            position: fixed; inset: 0; background: rgba(0,0,0,0.85);
+            backdrop-filter: blur(5px);
+            display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 200;
+            transition: opacity 0.3s ease;
+        }
+        .pointer-events-none { pointer-events: none; }
+    </style>
+</head>
+<body class="h-screen flex flex-col">
+
+    <!-- OVERLAY DE INICIO -->
+    <div id="startOverlay">
+        <h1 class="text-5xl font-bold text-gray-100 mb-2 tracking-widest">FL<span class="text-green-500">WEB</span></h1>
+        <p class="text-gray-400 mb-8 font-mono text-sm">Motor de audio listo. Haz clic para activar.</p>
+        <button id="startAppBtn" class="bg-orange-600 hover:bg-orange-500 text-white font-bold py-4 px-12 rounded shadow-2xl transform transition hover:scale-105 border-2 border-orange-400 cursor-pointer">
+            ACTIVAR SONIDO
+        </button>
+    </div>
+
+    <!-- HEADER -->
+    <header class="h-14 bg-[#202020] border-b border-[#333] flex items-center justify-between px-4 shadow-lg shrink-0">
+        <div class="flex items-center gap-4">
+            <h1 class="text-lg font-bold tracking-widest text-gray-100">FL<span class="text-green-500">WEB</span></h1>
+            
+            <!-- Transporte -->
+            <div class="flex bg-[#111] rounded p-1 gap-1 border border-[#333]">
+                <button id="playBtn" class="btn-icon w-8 h-8 rounded hover:bg-[#333] text-green-500 hover:text-green-400" title="Play/Pause">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+                </button>
+                <button id="stopBtn" class="btn-icon w-8 h-8 rounded hover:bg-[#333] text-gray-400 hover:text-white" title="Stop">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M6 6h12v12H6z"/></svg>
+                </button>
+                <button id="recBtn" class="btn-icon w-8 h-8 rounded hover:bg-[#333] text-red-500 hover:text-red-400" title="Exportar Audio (.wav)">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10"/></svg>
+                </button>
+            </div>
+
+            <!-- BPM & Vol -->
+            <div class="flex items-center gap-3 bg-[#2a2a2a] px-3 py-1 rounded border border-[#333]">
+                <div class="flex flex-col">
+                    <span class="text-[9px] text-gray-500 font-bold">TEMPO</span>
+                    <input type="number" id="tempoInput" value="130" min="40" max="240" class="w-12 bg-transparent text-green-500 font-mono text-sm focus:outline-none text-center">
+                </div>
+                <div class="h-6 w-[1px] bg-[#444]"></div>
+                <div class="flex flex-col w-24">
+                    <span class="text-[9px] text-gray-500 font-bold">VOLUMEN</span>
+                    <input type="range" id="masterVol" min="0" max="1" step="0.01" value="0.8" class="h-1 bg-gray-600 rounded appearance-none cursor-pointer w-full">
+                </div>
+            </div>
+        </div>
+
+        <div class="flex gap-2">
+            <button id="saveProjectBtn" class="btn-fl text-blue-400 border-blue-900/50 hover:bg-blue-900/30">Descargar Proyecto</button>
+            <label class="btn-fl text-yellow-400 border-yellow-900/50 hover:bg-yellow-900/30 cursor-pointer">
+                Cargar Proyecto
+                <input type="file" id="loadProjectInput" accept=".json" class="hidden">
+            </label>
+            <button id="resetBtn" class="btn-fl text-red-400 border-red-900/50 hover:bg-red-900/30 ml-2">Reset</button>
+        </div>
+    </header>
+
+    <!-- MAIN -->
+    <main class="flex-1 flex overflow-hidden">
+        
+        <!-- SIDEBAR -->
+        <aside class="w-72 bg-[#181818] border-r border-[#333] flex flex-col shrink-0 z-20 shadow-xl">
+            <div class="p-3 border-b border-[#333] flex justify-between items-center bg-[#202020]">
+                <span class="text-xs font-bold text-gray-400 tracking-wider">CHANNEL RACK</span>
+                <button id="addTrackBtn" class="text-green-500 hover:text-green-400 font-bold text-xl leading-none px-2 py-1 hover:bg-[#333] rounded" title="Añadir nueva pista">+</button>
+            </div>
+            
+            <div id="trackList" class="flex-1 overflow-y-auto bg-[#121212]">
+                <!-- Tracks aquí -->
+            </div>
+
+            <!-- Panel inferior sidebar -->
+            <div class="p-3 border-t border-[#333] bg-[#1a1a1a]">
+                <div class="flex justify-between items-center mb-2">
+                    <span class="text-[10px] text-gray-500 uppercase">Sample de la pista</span>
+                </div>
+                <label class="flex items-center gap-2 bg-[#252525] p-2 rounded cursor-pointer hover:bg-[#333] transition border border-[#333] group">
+                    <svg class="text-gray-400 group-hover:text-white" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                    <span class="text-xs text-gray-300 truncate w-40" id="sampleNameDisplay">Original (G4)</span>
+                    <input type="file" id="sampleInput" accept="audio/*" class="hidden">
+                </label>
+            </div>
+        </aside>
+
+        <!-- PIANO ROLL -->
+        <div class="flex-1 flex flex-col bg-[#141414] min-w-0">
+            
+            <div class="h-8 bg-[#1f1f1f] border-b border-[#333] flex items-center justify-between px-2 shrink-0">
+                <span id="currentTrackName" class="text-xs font-bold text-green-500 uppercase tracking-wider pl-2">Track 1</span>
+                <button id="addBarsBtn" class="btn-fl text-[10px] py-0 h-6 flex items-center gap-1">
+                    <span>+</span> Extender Rejilla
+                </button>
+            </div>
+
+            <div class="flex-1 grid-wrapper relative">
+                <div id="keysContainer" class="keys-container"></div>
+                <div id="gridScrollArea" class="grid-scroll-area">
+                    <div id="timeline" class="timeline"></div>
+                    <div id="pianoGrid" class="piano-grid"></div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        // === CONFIGURACIÓN ===
+        const NOTE_NAMES = ['B', 'A#', 'A', 'G#', 'G', 'F#', 'F', 'E', 'D#', 'D', 'C#', 'C'];
+        const OCTAVES = [6, 5, 4, 3]; 
+        let FULL_NOTES = [];
+        
+        // Generar notas
+        OCTAVES.forEach(oct => {
+            NOTE_NAMES.forEach(note => {
+                FULL_NOTES.push({ note, oct, name: `${note}${oct}`, isSharp: note.includes('#') });
+            });
+        });
+
+        const BASE_NOTE_FREQ = 391.995; 
+        const BASE_NOTE_MIDI = 67;      
+        const DEFAULT_SAMPLE_URL = 'https://raw.githubusercontent.com/Logise1/static/main/bi-online-audio-converter.mp3';
+
+        // === ESTADO GLOBAL ===
+        let audioCtx;
+        let masterGain;
+        let isPlaying = false;
+        let tempo = 130;
+        let currentStep = 0;
+        let nextNoteTime = 0.0;
+        let lookahead = 25.0;
+        let scheduleAheadTime = 0.1;
+        let timerID;
+        
+        let totalSteps = 32; 
+        let activeTrackId = 0;
+        let tracks = [];
+
+        // === DOM ELEMENTS ===
+        const gridScrollArea = document.getElementById('gridScrollArea');
+        const keysContainer = document.getElementById('keysContainer');
+        const pianoGrid = document.getElementById('pianoGrid');
+        const timeline = document.getElementById('timeline');
+        const trackList = document.getElementById('trackList');
+        const sampleNameDisplay = document.getElementById('sampleNameDisplay');
+        const startOverlay = document.getElementById('startOverlay');
+        const startAppBtn = document.getElementById('startAppBtn');
+
+        // === AUDIO ENGINE ===
+        
+        function getAudioContext() {
+            if (!audioCtx) {
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                audioCtx = new AudioContext();
+                masterGain = audioCtx.createGain();
+                masterGain.gain.value = 0.8;
+                masterGain.connect(audioCtx.destination);
+            }
+            return audioCtx;
+        }
+
+        class Track {
+            constructor(id, name, color = '#4ade80') {
+                this.id = id;
+                this.name = name;
+                this.color = color;
+                this.buffer = null;
+                this.sampleUrl = null;
+                this.notes = {}; 
+                this.muted = false;
+                this.solo = false;
+                this.isLoading = false; 
+            }
+
+            async loadSample(url) {
+                this.isLoading = true;
+                renderTrackList(); 
+                
+                try {
+                    const ctx = getAudioContext(); 
+                    const response = await fetch(url);
+                    const arrayBuffer = await response.arrayBuffer();
+                    this.buffer = await ctx.decodeAudioData(arrayBuffer);
+                    this.sampleUrl = url;
+                } catch (e) {
+                    console.error(`Error loading sample for ${this.name}:`, e);
+                    this.createFallbackBuffer();
+                } finally {
+                    this.isLoading = false;
+                    renderTrackList();
+                }
+            }
+
+            createFallbackBuffer() {
+                const ctx = getAudioContext();
+                const sr = ctx.sampleRate;
+                const buff = ctx.createBuffer(1, sr * 0.5, sr);
+                const data = buff.getChannelData(0);
+                for(let i=0; i<data.length; i++) {
+                    let t = i/sr;
+                    data[i] = Math.sin(t * 440 * 2 * Math.PI) * Math.exp(-10*t);
+                }
+                this.buffer = buff;
+            }
+        }
+
+        function getPlaybackRate(targetNoteIndex) {
+            const noteObj = FULL_NOTES[targetNoteIndex];
+            const notesScale = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+            const noteInScale = notesScale.indexOf(noteObj.note);
+            const midiVal = (noteObj.oct + 1) * 12 + noteInScale;
+            const semitones = midiVal - BASE_NOTE_MIDI;
+            return Math.pow(2, semitones / 12);
+        }
+
+        function playSound(track, noteIndex, time, ctx = null, dest = null) {
+            if (!track.buffer || track.muted) return;
+            
+            // Solo logic check global
+            if (!dest) { // Solo aplica en playback real, no render
+                 const anySolo = tracks.some(t => t.solo);
+                 if (anySolo && !track.solo) return;
+            } else {
+                 // Render logic
+                 const anySolo = tracks.some(t => t.solo);
+                 if (anySolo && !track.solo) return;
+            }
+
+            const context = ctx || getAudioContext();
+            
+            try {
+                const source = context.createBufferSource();
+                source.buffer = track.buffer;
+                source.playbackRate.value = getPlaybackRate(noteIndex);
+
+                const gain = context.createGain();
+                gain.gain.value = 1.0; 
+
+                source.connect(gain);
+                if (dest) {
+                    gain.connect(dest);
+                } else {
+                    gain.connect(masterGain);
+                }
+                source.start(time);
+            } catch(e) { }
+        }
+
+        // === STORAGE MANAGER ===
+
+        function saveToLocalStorage() {
+            const state = {
+                tempo,
+                totalSteps,
+                tracks: tracks.map(t => ({
+                    id: t.id,
+                    name: t.name,
+                    color: t.color,
+                    notes: t.notes,
+                    muted: t.muted,
+                    solo: t.solo,
+                    sampleUrl: (t.sampleUrl && !t.sampleUrl.startsWith('blob:')) ? t.sampleUrl : DEFAULT_SAMPLE_URL
+                }))
+            };
+            localStorage.setItem('minifl_project', JSON.stringify(state));
+        }
+
+        function loadFromLocalStorage() {
+            const raw = localStorage.getItem('minifl_project');
+            if(!raw) return false;
+
+            try {
+                const state = JSON.parse(raw);
+                tempo = state.tempo || 130;
+                totalSteps = state.totalSteps || 32;
+                document.getElementById('tempoInput').value = tempo;
+
+                tracks = [];
+                state.tracks.forEach(tData => {
+                    const t = new Track(tData.id, tData.name, tData.color);
+                    t.notes = tData.notes || {};
+                    t.muted = tData.muted || false;
+                    t.solo = tData.solo || false;
+                    t.loadSample(tData.sampleUrl || DEFAULT_SAMPLE_URL);
+                    tracks.push(t);
+                });
+                
+                if(tracks.length > 0) selectTrack(0);
+                renderGrid();
+                return true;
+            } catch(e) {
+                console.error(e);
+                return false;
+            }
+        }
+
+        function clearLocalStorage() {
+            localStorage.removeItem('minifl_project');
+            location.reload();
+        }
+
+        // === SCHEDULER ===
+
+        function nextNote() {
+            const secondsPerBeat = 60.0 / tempo;
+            nextNoteTime += 0.25 * secondsPerBeat; 
+            currentStep++;
+            if (currentStep >= totalSteps) currentStep = 0; 
+        }
+
+        function scheduleNote(step, time) {
+            const ctx = getAudioContext();
+            setTimeout(() => drawPlayhead(step), (time - ctx.currentTime) * 1000);
+
+            tracks.forEach(track => {
+                for (let i = 0; i < FULL_NOTES.length; i++) {
+                    if (track.notes[`${step}_${i}`]) {
+                        playSound(track, i, time);
+                    }
+                }
+            });
+        }
+
+        function scheduler() {
+            const ctx = getAudioContext();
+            while (nextNoteTime < ctx.currentTime + scheduleAheadTime) {
+                scheduleNote(currentStep, nextNoteTime);
+                nextNote();
+            }
+            if (isPlaying) timerID = setTimeout(scheduler, lookahead);
+        }
+
+        function play() {
+            if (isPlaying) { stop(); return; }
+
+            const ctx = getAudioContext();
+            if(ctx.state === 'suspended') ctx.resume();
+
+            isPlaying = true;
+            currentStep = 0;
+            nextNoteTime = ctx.currentTime;
+            scheduler();
+            
+            const btn = document.getElementById('playBtn');
+            btn.classList.add('text-green-300', 'bg-green-900/50');
+            btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>`;
+        }
+
+        function stop() {
+            isPlaying = false;
+            clearTimeout(timerID);
+            drawPlayhead(-1);
+            
+            const btn = document.getElementById('playBtn');
+            btn.classList.remove('text-green-300', 'bg-green-900/50');
+            btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>`;
+        }
+
+        // === EXPORTAR WAV (NUEVO SISTEMA OFFLINE) ===
+
+        function audioBufferToWav(buffer, opt) {
+            opt = opt || {};
+            var numChannels = buffer.numberOfChannels;
+            var sampleRate = buffer.sampleRate;
+            var format = opt.float32 ? 3 : 1;
+            var bitDepth = format === 3 ? 32 : 16;
+        
+            var result;
+            if (numChannels === 2) {
+                result = interleave(buffer.getChannelData(0), buffer.getChannelData(1));
+            } else {
+                result = buffer.getChannelData(0);
+            }
+        
+            return encodeWAV(result, format, sampleRate, numChannels, bitDepth);
+        }
+        
+        function encodeWAV(samples, format, sampleRate, numChannels, bitDepth) {
+            var bytesPerSample = bitDepth / 8;
+            var blockAlign = numChannels * bytesPerSample;
+        
+            var buffer = new ArrayBuffer(44 + samples.length * bytesPerSample);
+            var view = new DataView(buffer);
+        
+            /* RIFF identifier */
+            writeString(view, 0, 'RIFF');
+            /* RIFF chunk length */
+            view.setUint32(4, 36 + samples.length * bytesPerSample, true);
+            /* RIFF type */
+            writeString(view, 8, 'WAVE');
+            /* format chunk identifier */
+            writeString(view, 12, 'fmt ');
+            /* format chunk length */
+            view.setUint32(16, 16, true);
+            /* sample format (raw) */
+            view.setUint16(20, format, true);
+            /* channel count */
+            view.setUint16(22, numChannels, true);
+            /* sample rate */
+            view.setUint32(24, sampleRate, true);
+            /* byte rate (sample rate * block align) */
+            view.setUint32(28, sampleRate * blockAlign, true);
+            /* block align (channel count * bytes per sample) */
+            view.setUint16(32, blockAlign, true);
+            /* bits per sample */
+            view.setUint16(34, bitDepth, true);
+            /* data chunk identifier */
+            writeString(view, 36, 'data');
+            /* data chunk length */
+            view.setUint32(40, samples.length * bytesPerSample, true);
+        
+            if (format === 1) { // Raw PCM
+                floatTo16BitPCM(view, 44, samples);
+            } else {
+                writeFloat32(view, 44, samples);
+            }
+        
+            return buffer;
+        }
+        
+        function interleave(inputL, inputR) {
+            var length = inputL.length + inputR.length;
+            var result = new Float32Array(length);
+        
+            var index = 0;
+            var inputIndex = 0;
+        
+            while (index < length) {
+                result[index++] = inputL[inputIndex];
+                result[index++] = inputR[inputIndex];
+                inputIndex++;
+            }
+            return result;
+        }
+        
+        function writeString(view, offset, string) {
+            for (var i = 0; i < string.length; i++) {
+                view.setUint8(offset + i, string.charCodeAt(i));
+            }
+        }
+        
+        function floatTo16BitPCM(output, offset, input) {
+            for (var i = 0; i < input.length; i++, offset += 2) {
+                var s = Math.max(-1, Math.min(1, input[i]));
+                output.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true);
+            }
+        }
+        
+        function writeFloat32(output, offset, input) {
+            for (var i = 0; i < input.length; i++, offset += 4) {
+                output.setFloat32(offset, input[i], true);
+            }
+        }
+
+        async function renderAudio() {
+            if (isPlaying) stop();
+            if (!confirm("¿Renderizar proyecto a .wav? (Esto es muy rápido)")) return;
+
+            // Calcular duración total
+            const secondsPerBeat = 60.0 / tempo;
+            const totalDuration = totalSteps * 0.25 * secondsPerBeat;
+            
+            // Configurar Offline Context
+            const sr = 44100;
+            const offlineCtx = new OfflineAudioContext(2, sr * (totalDuration + 1), sr); // +1s cola
+
+            // Programar todo en el contexto offline
+            tracks.forEach(track => {
+                if (track.muted) return;
+                const anySolo = tracks.some(t => t.solo);
+                if (anySolo && !track.solo) return;
+
+                // Recorrer todos los pasos
+                for (let step = 0; step < totalSteps; step++) {
+                     const time = step * 0.25 * secondsPerBeat;
+                     for (let i = 0; i < FULL_NOTES.length; i++) {
+                        if (track.notes[`${step}_${i}`]) {
+                            // Reproducir en offlineCtx
+                            playSound(track, i, time, offlineCtx, offlineCtx.destination);
+                        }
+                    }
+                }
+            });
+
+            // Renderizar
+            startAppBtn.textContent = "Renderizando...";
+            try {
+                const renderedBuffer = await offlineCtx.startRendering();
+                const wavData = audioBufferToWav(renderedBuffer);
+                const blob = new Blob([wavData], { type: 'audio/wav' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'mini_fl_pro.wav';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                alert("¡Exportación completada!");
+            } catch (e) {
+                console.error(e);
+                alert("Error renderizando audio.");
+            } finally {
+                 startAppBtn.textContent = "ACTIVAR SONIDO"; // Reset label just in case
+            }
+        }
+
+        // === UI RENDERING ===
+
+        function renderGrid() {
+            keysContainer.innerHTML = '';
+            pianoGrid.innerHTML = '';
+            timeline.innerHTML = '';
+
+            const colWidth = 30; 
+            pianoGrid.style.gridTemplateColumns = `repeat(${totalSteps}, ${colWidth}px)`;
+            pianoGrid.style.width = `${totalSteps * colWidth}px`;
+            timeline.style.width = `${totalSteps * colWidth}px`;
+
+            FULL_NOTES.forEach((n, rowIndex) => {
+                const key = document.createElement('div');
+                key.className = `piano-key ${n.isSharp ? 'sharp' : ''}`;
+                key.innerHTML = `<span>${n.name}</span>`;
+                keysContainer.appendChild(key);
+
+                for (let col = 0; col < totalSteps; col++) {
+                    const cell = document.createElement('div');
+                    const isBeatStart = col % 4 === 0;
+                    cell.className = `cell ${n.isSharp ? 'row-sharp' : ''} ${isBeatStart ? 'beat-start' : ''}`;
+                    
+                    const currentTrack = tracks[activeTrackId];
+                    if (currentTrack && currentTrack.notes[`${col}_${rowIndex}`]) {
+                        cell.classList.add('active');
+                    }
+
+                    cell.onmousedown = (e) => handleCellClick(rowIndex, col, cell, e);
+                    cell.onmouseenter = (e) => {
+                        if (e.buttons === 1) handleCellClick(rowIndex, col, cell, e, true);
+                    };
+
+                    pianoGrid.appendChild(cell);
+                }
+            });
+
+            for(let i=0; i<totalSteps; i++) {
+                const mark = document.createElement('div');
+                mark.className = 'time-marker';
+                mark.style.width = `${colWidth}px`;
+                if (i % 4 === 0) mark.textContent = (i/4) + 1;
+                mark.id = `time-${i}`;
+                timeline.appendChild(mark);
+            }
+        }
+
+        function handleCellClick(row, col, cell, e, isDrag = false) {
+            if (!tracks[activeTrackId]) return; 
+            
+            const track = tracks[activeTrackId];
+            const key = `${col}_${row}`;
+            const ctx = getAudioContext();
+            
+            const activate = () => {
+                track.notes[key] = true;
+                cell.classList.add('active');
+                playSound(track, row, ctx.currentTime);
+                saveToLocalStorage(); 
+            };
+
+            const deactivate = () => {
+                delete track.notes[key];
+                cell.classList.remove('active');
+                saveToLocalStorage(); 
+            };
+
+            if (isDrag) {
+                if (!track.notes[key]) activate();
+            } else {
+                if (track.notes[key]) deactivate();
+                else activate();
+            }
+        }
+
+        function renderTrackList() {
+            trackList.innerHTML = '';
+            tracks.forEach((t, idx) => {
+                const row = document.createElement('div');
+                row.className = `channel-row ${idx === activeTrackId ? 'selected' : ''}`;
+                
+                // Botones Mute/Solo
+                const btnMute = document.createElement('div');
+                btnMute.className = `track-control-btn btn-mute ${t.muted ? 'active' : ''}`;
+                btnMute.textContent = 'M';
+                btnMute.onclick = (e) => {
+                    e.stopPropagation();
+                    t.muted = !t.muted;
+                    saveToLocalStorage();
+                    renderTrackList();
+                };
+
+                const btnSolo = document.createElement('div');
+                btnSolo.className = `track-control-btn btn-solo ${t.solo ? 'active' : ''}`;
+                btnSolo.textContent = 'S';
+                btnSolo.onclick = (e) => {
+                    e.stopPropagation();
+                    t.solo = !t.solo;
+                    saveToLocalStorage();
+                    renderTrackList();
+                };
+
+                // Contenido
+                const infoDiv = document.createElement('div');
+                infoDiv.className = "flex-1 min-w-0 flex flex-col justify-center ml-2";
+                infoDiv.innerHTML = `<div class="text-xs font-bold text-gray-200 truncate select-none">${t.name}</div>`;
+
+                const colorBar = document.createElement('div');
+                colorBar.className = "w-1 h-full absolute left-0 top-0 bottom-0";
+                colorBar.style.backgroundColor = t.color;
+                
+                // Si no está seleccionado, no se ve el borde verde, pero la barra de color ayuda
+                // En el diseño actual el borde verde es de selección.
+                // Usaremos un indicador pequeño dentro
+                const indicator = document.createElement('div');
+                indicator.className = "w-2 h-2 rounded-full mr-2";
+                indicator.style.backgroundColor = t.color;
+
+                row.appendChild(indicator);
+                row.appendChild(btnMute);
+                row.appendChild(btnSolo);
+                row.appendChild(infoDiv);
+
+                row.onclick = () => selectTrack(idx);
+                trackList.appendChild(row);
+            });
+            updateHeader();
+        }
+
+        function selectTrack(idx) {
+            activeTrackId = idx;
+            renderTrackList();
+            renderGrid();
+            updateHeader();
+        }
+
+        function updateHeader() {
+            const t = tracks[activeTrackId];
+            if(t) {
+                document.getElementById('currentTrackName').textContent = t.name;
+                sampleNameDisplay.textContent = t.sampleUrl ? (t.sampleUrl.startsWith('blob:') ? 'Audio Personalizado' : 'Original') : 'Original';
+            }
+        }
+
+        function drawPlayhead(step) {
+            document.querySelectorAll('.time-marker.current').forEach(el => el.classList.remove('current'));
+            if (step !== -1) {
+                const el = document.getElementById(`time-${step}`);
+                if (el) {
+                    el.classList.add('current');
+                    if (step % 8 === 0) {
+                        const center = el.offsetLeft - (gridScrollArea.offsetWidth / 2) + 15;
+                        gridScrollArea.scrollLeft = center;
+                    }
+                }
+            }
+        }
+
+        // === GESTIÓN DE PROYECTOS Y TRACKS ===
+
+        function addTrack(name = "Instrumento") {
+            const id = tracks.length;
+            const newTrack = new Track(id, name);
+            newTrack.loadSample(DEFAULT_SAMPLE_URL);
+            tracks.push(newTrack);
+            renderTrackList();
+            if (tracks.length === 1) renderGrid();
+            saveToLocalStorage();
+        }
+
+        function saveProjectFile() {
+            const state = {
+                tempo,
+                totalSteps,
+                tracks: tracks.map(t => ({
+                    id: t.id,
+                    name: t.name,
+                    color: t.color,
+                    notes: t.notes,
+                    muted: t.muted,
+                    solo: t.solo
+                }))
+            };
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(state, null, 2));
+            const downloadAnchorNode = document.createElement('a');
+            downloadAnchorNode.setAttribute("href", dataStr);
+            downloadAnchorNode.setAttribute("download", "proyecto_minifl.json");
+            document.body.appendChild(downloadAnchorNode); // required for firefox
+            downloadAnchorNode.click();
+            downloadAnchorNode.remove();
+        }
+
+        function loadProjectFile(e) {
+            const file = e.target.files[0];
+            if(!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (ev) => {
+                try {
+                    const state = JSON.parse(ev.target.result);
+                    tempo = state.tempo || 130;
+                    totalSteps = state.totalSteps || 32;
+                    document.getElementById('tempoInput').value = tempo;
+
+                    tracks = [];
+                    state.tracks.forEach(tData => {
+                        const t = new Track(tData.id, tData.name, tData.color);
+                        t.notes = tData.notes || {};
+                        t.muted = tData.muted || false;
+                        t.solo = tData.solo || false;
+                        t.loadSample(DEFAULT_SAMPLE_URL);
+                        tracks.push(t);
+                    });
+
+                    if(tracks.length > 0) selectTrack(0);
+                    renderGrid();
+                    saveToLocalStorage();
+                    alert("Proyecto cargado correctamente.");
+                } catch(err) {
+                    alert("Error al leer el archivo.");
+                    console.error(err);
+                }
+            };
+            reader.readAsText(file);
+            e.target.value = '';
+        }
+
+        function initApp() {
+            const loaded = loadFromLocalStorage();
+            if (!loaded) addTrack("Lead Synth");
+            
+            gridScrollArea.addEventListener('scroll', () => {
+                keysContainer.scrollTop = gridScrollArea.scrollTop;
+            });
+
+            // Listeners
+            document.getElementById('playBtn').onclick = play;
+            document.getElementById('stopBtn').onclick = stop;
+            document.getElementById('recBtn').onclick = renderAudio;
+            document.getElementById('addTrackBtn').onclick = () => addTrack(`Inst ${tracks.length + 1}`);
+            
+            document.getElementById('addBarsBtn').onclick = () => { 
+                totalSteps += 16; 
+                renderGrid(); 
+                saveToLocalStorage(); 
+            };
+            
+            document.getElementById('tempoInput').onchange = (e) => { 
+                tempo = parseInt(e.target.value); 
+                saveToLocalStorage(); 
+            };
+            
+            document.getElementById('masterVol').oninput = (e) => masterGain.gain.value = e.target.value;
+            
+            document.getElementById('sampleInput').onchange = (e) => {
+                const f = e.target.files[0];
+                if(f) {
+                    tracks[activeTrackId].name = f.name.substring(0,12);
+                    tracks[activeTrackId].loadSample(URL.createObjectURL(f));
+                    renderTrackList();
+                }
+            };
+
+            document.getElementById('saveProjectBtn').onclick = saveProjectFile;
+            document.getElementById('loadProjectInput').onchange = loadProjectFile;
+            document.getElementById('resetBtn').onclick = () => {
+                if(confirm("¿Borrar todo y reiniciar?")) clearLocalStorage();
+            };
+        }
+
+        window.onload = initApp;
+
+        startAppBtn.onclick = () => {
+            const ctx = getAudioContext();
+            try { ctx.resume(); } catch(e) {}
+            startOverlay.style.opacity = '0';
+            startOverlay.style.pointerEvents = 'none';
+            setTimeout(() => startOverlay.classList.add('hidden'), 500);
+        };
+
+    </script>
+</body>
+</html>
